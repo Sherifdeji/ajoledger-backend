@@ -1,0 +1,192 @@
+// =============================================================
+// AjoLedger — Prisma Domain Schema
+// =============================================================
+// Financial invariant: ALL monetary values are integers (kobo).
+// Never store money as a float or decimal.
+//
+// Ledger invariant: Every Payment row MUST reference exactly one
+// of (contribution_id, payout_id). The XOR constraint is enforced
+// at the DB level via a custom CHECK constraint applied in
+// migration: *_add_payment_xor_constraint
+//
+// Note: DATABASE_URL is configured in prisma.config.ts (Prisma 7)
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================
+// ENUMS
+// =============================================================
+
+enum MemberRole {
+  COORDINATOR
+  CONTRIBUTOR
+}
+
+enum ContributionStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+// =============================================================
+// MODELS
+// =============================================================
+
+model User {
+  id                 String   @id @default(uuid())
+  phone              String   @unique
+  loginPinHash       String   @map("login_pin_hash")
+  transactionPinHash String   @map("transaction_pin_hash")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  ownedGroups SavingsGroup[]
+  memberships Membership[]
+
+  @@map("users")
+}
+
+model SavingsGroup {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  inviteCode     String   @unique @map("invite_code")
+  /// Nomba virtual account ID provisioned at group creation (1:1 mapping).
+  /// Nullable only during the brief atomic window of group creation.
+  nombaAccountId String?  @unique @map("nomba_account_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  owner   User   @relation(fields: [ownerId], references: [id])
+  ownerId String @map("owner_id")
+
+  memberships Membership[]
+  cycles      SavingsCycle[]
+
+  @@map("savings_groups")
+}
+
+model Membership {
+  id         String     @id @default(uuid())
+  role       MemberRole @default(CONTRIBUTOR)
+  /// Position in the payout queue (1-indexed).
+  /// Invariant: SavingsCycle.currentRound == Membership.payoutTurn
+  /// identifies the active beneficiary for the current round.
+  payoutTurn Int        @map("payout_turn")
+  joinedAt   DateTime   @default(now()) @map("joined_at")
+
+  group   SavingsGroup @relation(fields: [groupId], references: [id])
+  groupId String       @map("group_id")
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @map("user_id")
+
+  contributions Contribution[]
+  payouts       Payout[]
+
+  @@unique([groupId, userId])
+  @@map("memberships")
+}
+
+model SavingsCycle {
+  id                     String   @id @default(uuid())
+  /// Amount each member pays per round, stored in kobo (integer).
+  contributionAmountKobo Int      @map("contribution_amount_kobo")
+  totalRounds            Int      @map("total_rounds")
+  /// Starts at 1. Incremented after each successful payout.
+  currentRound           Int      @default(1) @map("current_round")
+  isActive               Boolean  @default(true) @map("is_active")
+  startedAt              DateTime @default(now()) @map("started_at")
+
+  group   SavingsGroup @relation(fields: [groupId], references: [id])
+  groupId String       @map("group_id")
+
+  contributions Contribution[]
+  payouts       Payout[]
+
+  @@map("savings_cycles")
+}
+
+model Contribution {
+  id          String             @id @default(uuid())
+  roundNumber Int                @map("round_number")
+  dueDate     DateTime           @map("due_date")
+  status      ContributionStatus @default(PENDING)
+
+  cycle   SavingsCycle @relation(fields: [cycleId], references: [id])
+  cycleId String       @map("cycle_id")
+
+  membership   Membership @relation(fields: [membershipId], references: [id])
+  membershipId String     @map("membership_id")
+
+  /// One contribution is settled by at most one payment.
+  payment Payment?
+
+  @@unique([cycleId, membershipId, roundNumber])
+  @@map("contributions")
+}
+
+model Payout {
+  id             String       @id @default(uuid())
+  /// Total disbursement in kobo: contributionAmountKobo × memberCount
+  amountKobo     Int          @map("amount_kobo")
+  status         PayoutStatus @default(PENDING)
+  nombaReference String?      @map("nomba_reference")
+  paidAt         DateTime?    @map("paid_at")
+
+  cycle   SavingsCycle @relation(fields: [cycleId], references: [id])
+  cycleId String       @map("cycle_id")
+
+  membership   Membership @relation(fields: [membershipId], references: [id])
+  membershipId String     @map("membership_id")
+
+  /// One payout is recorded by exactly one payment ledger entry.
+  payment Payment?
+
+  @@map("payouts")
+}
+
+/// Polymorphic immutable payments ledger.
+///
+/// INVARIANT (XOR): Exactly one of (contributionId, payoutId) MUST be non-null.
+/// Enforced at the DB level by CHECK constraint in migration
+/// *_add_payment_xor_constraint:
+///   (contribution_id IS NULL) <> (payout_id IS NULL)
+///
+/// Records in this table are IMMUTABLE once written.
+/// A failed payment creates a new row; it never mutates an existing one.
+model Payment {
+  id                  String        @id @default(uuid())
+  /// Amount in kobo — must match the linked contribution or payout amount.
+  amountKobo          Int           @map("amount_kobo")
+  status              PaymentStatus @default(PENDING)
+  /// Nomba transaction reference — unique, used for idempotency on webhook replay.
+  nombaTransactionRef String?       @unique @map("nomba_transaction_ref")
+  recordedAt          DateTime      @default(now()) @map("recorded_at")
+
+  contribution   Contribution? @relation(fields: [contributionId], references: [id])
+  contributionId String?       @unique @map("contribution_id")
+
+  payout   Payout? @relation(fields: [payoutId], references: [id])
+  payoutId String? @unique @map("payout_id")
+
+  @@map("payments")
+}
