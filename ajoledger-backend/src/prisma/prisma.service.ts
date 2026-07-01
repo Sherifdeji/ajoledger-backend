@@ -4,6 +4,9 @@ import { PrismaClient } from '@prisma/client';
 /**
  * Singleton Prisma client managed by NestJS DI.
  * Never instantiate PrismaClient directly outside this service.
+ *
+ * Uses Prisma 5 (prisma-client-js generator) — fully CommonJS-compatible
+ * with NestJS. Connects via DATABASE_URL environment variable.
  */
 @Injectable()
 export class PrismaService
