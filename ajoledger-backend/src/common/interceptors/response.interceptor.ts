@@ -21,9 +21,10 @@ export interface AjoLedgerResponse<T> {
  * with `{ message, data }` to customise the response message.
  */
 @Injectable()
-export class ResponseInterceptor<T>
-  implements NestInterceptor<T, AjoLedgerResponse<T>>
-{
+export class ResponseInterceptor<T> implements NestInterceptor<
+  T,
+  AjoLedgerResponse<T>
+> {
   intercept(
     _context: ExecutionContext,
     next: CallHandler,
