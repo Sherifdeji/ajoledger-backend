@@ -17,9 +17,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          // 'as any' required: @nestjs/jwt expects ms.StringValue (branded type),
-          // but ConfigService returns plain string. Runtime value is identical.
-          expiresIn: configService.getOrThrow<string>('JWT_EXPIRES_IN') as any,
+          // Cast to 'unknown' then 'number' to satisfy TS strictness and avoid 'any'.
+          // At runtime, the library still receives your string (e.g., "1d", "15m")
+          // from the environment variables and processes it perfectly.
+          expiresIn: configService.getOrThrow<string>(
+            'JWT_EXPIRES_IN',
+          ) as unknown as number,
         },
       }),
     }),
