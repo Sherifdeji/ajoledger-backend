@@ -23,23 +23,23 @@ export class AuthService {
   // ─────────────────────────────────────────────────────────────
 
   async register(
-    phone: string,
-    loginPin: string,
-  ): Promise<{ accessToken: string; user: { id: string; phone: string } }> {
-    const existing = await this.usersService.findByPhone(phone);
+    email: string,
+    password: string,
+  ): Promise<{ accessToken: string; user: { id: string; email: string } }> {
+    const existing = await this.usersService.findByEmail(email);
     if (existing) {
       throw new ConflictException(
-        'An account with this phone number already exists.',
+        'An account with this email address already exists.',
       );
     }
 
-    const loginPinHash = await bcrypt.hash(loginPin, BCRYPT_ROUNDS);
-    const user = await this.usersService.createUser(phone, loginPinHash);
-    const accessToken = this.signToken(user.id, user.phone);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const user = await this.usersService.createUser(email, passwordHash);
+    const accessToken = this.signToken(user.id, user.email);
 
     return {
       accessToken,
-      user: { id: user.id, phone: user.phone },
+      user: { id: user.id, email: user.email },
     };
   }
 
@@ -48,26 +48,26 @@ export class AuthService {
   // ─────────────────────────────────────────────────────────────
 
   async login(
-    phone: string,
-    loginPin: string,
-  ): Promise<{ accessToken: string; user: { id: string; phone: string } }> {
-    const user = await this.usersService.findByPhone(phone);
+    email: string,
+    password: string,
+  ): Promise<{ accessToken: string; user: { id: string; email: string } }> {
+    const user = await this.usersService.findByEmail(email);
 
-    // Use a constant-time comparison path whether user exists or not
-    // to avoid timing-based phone enumeration attacks.
-    const pinToCheck =
-      user?.loginPinHash ??
-      '$2b$12$invalidhashpadding000000000000000000000000000000000000000';
-    const isMatch = await bcrypt.compare(loginPin, pinToCheck);
+    // Constant-time comparison path whether user exists or not,
+    // to avoid timing-based email enumeration attacks.
+    const hashToCheck =
+      user?.passwordHash ??
+      '$2b$12$invalidhashpaddinginvalidhashpaddinginvalidhashpadding00';
+    const isMatch = await bcrypt.compare(password, hashToCheck);
 
     if (!user || !isMatch) {
-      throw new UnauthorizedException('Invalid phone number or PIN.');
+      throw new UnauthorizedException('Invalid email address or password.');
     }
 
-    const accessToken = this.signToken(user.id, user.phone);
+    const accessToken = this.signToken(user.id, user.email);
     return {
       accessToken,
-      user: { id: user.id, phone: user.phone },
+      user: { id: user.id, email: user.email },
     };
   }
 
@@ -127,13 +127,9 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Internal helpers
+  // Exported helper for inline use by PaymentsService (M7)
   // ─────────────────────────────────────────────────────────────
 
-  /**
-   * Exposed for use by other services that need to perform inline
-   * transaction PIN verification (e.g. PaymentsService).
-   */
   async verifyTransactionPinForUser(
     userId: string,
     transactionPin: string,
@@ -141,9 +137,13 @@ export class AuthService {
     await this.verifyTransactionPin(userId, transactionPin);
   }
 
-  private signToken(userId: string, phone: string): string {
-    const payload: JwtPayload = { sub: userId, phone };
-    // secret and expiresIn are already configured at module level via JwtModule.registerAsync
+  // ─────────────────────────────────────────────────────────────
+  // Internal helpers
+  // ─────────────────────────────────────────────────────────────
+
+  private signToken(userId: string, email: string): string {
+    const payload: JwtPayload = { sub: userId, email };
+    // secret and expiresIn are configured at module level via JwtModule.registerAsync
     return this.jwtService.sign(payload);
   }
 }

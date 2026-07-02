@@ -6,12 +6,12 @@ import { UsersService } from '../../users/users.service';
 
 export interface JwtPayload {
   sub: string;
-  phone: string;
+  email: string;
 }
 
 export interface AuthenticatedUser {
   id: string;
-  phone: string;
+  email: string;
 }
 
 @Injectable()
@@ -32,7 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException('User no longer exists.');
     }
-    // Return only the safe shape — never expose hashed PINs via req.user
-    return { id: user.id, phone: user.phone };
+    // Return only the safe shape — never expose password or PIN hashes via req.user
+    return { id: user.id, email: user.email };
   }
 }

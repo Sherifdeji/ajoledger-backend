@@ -26,16 +26,18 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() dto: RegisterDto) {
-    const data = await this.authService.register(dto.phone, dto.loginPin);
+    const data = await this.authService.register(dto.email, dto.password);
     return { message: 'Registration successful.', data };
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto) {
-    const data = await this.authService.login(dto.phone, dto.loginPin);
+    const data = await this.authService.login(dto.email, dto.password);
     return { message: 'Login successful.', data };
   }
+
+  // ── Transaction PIN endpoints — untouched by the email/password pivot ──
 
   @Post('setup-transaction-pin')
   @UseGuards(JwtAuthGuard)
