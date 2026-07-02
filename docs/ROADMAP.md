@@ -70,15 +70,18 @@ Day 1 — Foundation, Identity & Group Lifecycle
 
 - [ ] **Milestone 5: CyclesModule — Savings Cycle Configuration**
   - Create `src/cycles/cycles.module.ts`, `cycles.service.ts`, `cycles.controller.ts`
-  - DTO: `CreateCycleDto` (contributionAmountKobo: Int, totalRounds: Int, startDate)
-  - Guard: verify calling user is the group's COORDINATOR (reusable `IsCoordinatorGuard`)
+  - DTO: `CreateCycleDto` (contributionAmountKobo: Int, dueDate: ISO date string)
+  - Do **not** accept `totalRounds` from the client; calculate `totalRounds = current membership count`
+  - Guardrail: reject `POST /groups/:id/join` while the group has an active savings cycle
+  - Guard: verify calling user is the group's COORDINATOR
   - `CyclesService.createCycle()`:
     1. Ensure no active cycle already exists for the group (conflict guard)
-    2. Create `SavingsCycle` record (`is_active: true, current_round: 1`)
-    3. Seed `Contribution` records: for every `Membership` × every round number (1..totalRounds) → batch insert
-    4. Return cycle summary
+    2. Load the current membership snapshot and calculate `totalRounds`
+    3. Create `SavingsCycle` record (`is_active: true, current_round: 1`)
+    4. Seed `Contribution` records for **Round 1 only**: one pending contribution per current member
+    5. Return cycle summary
   - Expose: `POST /api/v1/groups/:id/cycles` (JWT + COORDINATOR only)
-  - Verify: cycle creation seeds N×M contribution records correctly; second cycle creation on same group is rejected
+  - Verify: cycle creation seeds N Round 1 contribution records correctly; second cycle creation on same group is rejected; joins are blocked while the cycle is active
 
 ---
 

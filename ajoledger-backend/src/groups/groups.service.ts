@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { MemberRole } from '@prisma/client';
+import { MemberRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NombaService } from '../nomba/nomba.service';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -98,35 +98,61 @@ export class GroupsService {
       );
     }
 
-    // Step 2: Prevent duplicate membership.
-    const existingMembership = await this.prisma.membership.findUnique({
-      where: { groupId_userId: { groupId, userId } },
-    });
+    let membership: { id: string; groupId: string };
 
-    if (existingMembership) {
-      throw new ConflictException('You are already a member of this group.');
-    }
+    try {
+      // Step 2: Freeze membership once an active cycle exists, then assign
+      // next payoutTurn atomically under Serializable isolation.
+      membership = await this.prisma.$transaction(
+        async (tx) => {
+          const activeCycle = await tx.savingsCycle.findFirst({
+            where: { groupId, isActive: true },
+            select: { id: true },
+          });
 
-    // Step 3: Assign next payoutTurn and create membership atomically.
-    // Using a transaction with a MAX aggregate prevents a race condition
-    // where two users join simultaneously and receive the same turn.
-    const membership = await this.prisma.$transaction(async (tx) => {
-      const aggregate = await tx.membership.aggregate({
-        where: { groupId },
-        _max: { payoutTurn: true },
-      });
+          if (activeCycle) {
+            throw new ConflictException(
+              'This group has an active savings cycle and is not accepting new members.',
+            );
+          }
 
-      const nextTurn = (aggregate._max.payoutTurn ?? 0) + 1;
+          const existingMembership = await tx.membership.findUnique({
+            where: { groupId_userId: { groupId, userId } },
+          });
 
-      return tx.membership.create({
-        data: {
-          groupId,
-          userId,
-          role: MemberRole.CONTRIBUTOR,
-          payoutTurn: nextTurn,
+          if (existingMembership) {
+            throw new ConflictException(
+              'You are already a member of this group.',
+            );
+          }
+
+          const aggregate = await tx.membership.aggregate({
+            where: { groupId },
+            _max: { payoutTurn: true },
+          });
+
+          const nextTurn = (aggregate._max.payoutTurn ?? 0) + 1;
+
+          return tx.membership.create({
+            data: {
+              groupId,
+              userId,
+              role: MemberRole.CONTRIBUTOR,
+              payoutTurn: nextTurn,
+            },
+          });
         },
-      });
-    });
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (this.isSerializableTransactionConflict(error)) {
+        throw new ConflictException(
+          'The group membership changed concurrently. Please retry.',
+        );
+      }
+
+      throw error;
+    }
 
     return { membershipId: membership.id, groupId };
   }
@@ -160,5 +186,12 @@ export class GroupsService {
 
     // Astronomically unlikely — two collisions in a row
     throw new Error('Failed to generate a unique invite code. Please retry.');
+  }
+
+  private isSerializableTransactionConflict(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2034'
+    );
   }
 }
