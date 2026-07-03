@@ -31,11 +31,14 @@ export class GroupsService {
     // The DB unique constraint is the final safety net; we verify pre-insert.
     const inviteCode = await this.generateUniqueInviteCode();
 
+    const owner = await this.getUserForMembershipProvisioning(userId);
+    const groupId = crypto.randomUUID();
+    const coordinatorMembershipId = crypto.randomUUID();
+
     // Step 2: Provision a Nomba virtual account BEFORE persisting the group.
     // A group without a vault is financially invalid — fail fast if Nomba is down.
-    const tempGroupRef = `grp-${crypto.randomBytes(8).toString('hex')}`;
     const virtualAccount = await this.nombaService.createVirtualAccount(
-      tempGroupRef,
+      groupId,
       dto.name,
     );
 
@@ -43,12 +46,21 @@ export class GroupsService {
       `Nomba virtual account provisioned for "${dto.name}": ${virtualAccount.nombaAccountId}`,
     );
 
+    const coordinatorVirtualAccount =
+      await this.nombaService.createStaticVirtualAccount({
+        membershipId: coordinatorMembershipId,
+        groupSubaccountId: virtualAccount.nombaAccountId,
+        customerEmail: owner.email,
+        customerName: this.buildVirtualAccountName(dto.name, owner.email),
+      });
+
     // Step 3: Persist group + COORDINATOR membership atomically.
     // If the DB write fails after Nomba succeeds, the orphaned virtual account
     // is an acceptable rare edge case for the hackathon MVP.
     const group = await this.prisma.$transaction(async (tx) => {
       const newGroup = await tx.savingsGroup.create({
         data: {
+          id: groupId,
           name: dto.name,
           description: dto.description,
           inviteCode,
@@ -60,10 +72,15 @@ export class GroupsService {
       // Auto-enroll creator as COORDINATOR at payoutTurn 1
       await tx.membership.create({
         data: {
+          id: coordinatorMembershipId,
           groupId: newGroup.id,
           userId,
           role: MemberRole.COORDINATOR,
           payoutTurn: 1,
+          virtualAccountNumber: coordinatorVirtualAccount.accountNumber,
+          virtualBankName: coordinatorVirtualAccount.bankName,
+          virtualAccountName: coordinatorVirtualAccount.accountName,
+          nombaAccountReference: coordinatorVirtualAccount.accountReference,
         },
       });
 
@@ -97,6 +114,42 @@ export class GroupsService {
         'Invalid invite code. Please check and try again.',
       );
     }
+
+    if (!group.nombaAccountId) {
+      throw new ConflictException(
+        'This group is missing its Nomba vault and cannot accept new members.',
+      );
+    }
+
+    const activeCycle = await this.prisma.savingsCycle.findFirst({
+      where: { groupId, isActive: true },
+      select: { id: true },
+    });
+
+    if (activeCycle) {
+      throw new ConflictException(
+        'This group has an active savings cycle and is not accepting new members.',
+      );
+    }
+
+    const existingMembership = await this.prisma.membership.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+      select: { id: true },
+    });
+
+    if (existingMembership) {
+      throw new ConflictException('You are already a member of this group.');
+    }
+
+    const user = await this.getUserForMembershipProvisioning(userId);
+    const membershipId = crypto.randomUUID();
+    const membershipVirtualAccount =
+      await this.nombaService.createStaticVirtualAccount({
+        membershipId,
+        groupSubaccountId: group.nombaAccountId,
+        customerEmail: user.email,
+        customerName: this.buildVirtualAccountName(group.name, user.email),
+      });
 
     let membership: { id: string; groupId: string };
 
@@ -135,10 +188,15 @@ export class GroupsService {
 
           return tx.membership.create({
             data: {
+              id: membershipId,
               groupId,
               userId,
               role: MemberRole.CONTRIBUTOR,
               payoutTurn: nextTurn,
+              virtualAccountNumber: membershipVirtualAccount.accountNumber,
+              virtualBankName: membershipVirtualAccount.bankName,
+              virtualAccountName: membershipVirtualAccount.accountName,
+              nombaAccountReference: membershipVirtualAccount.accountReference,
             },
           });
         },
@@ -193,5 +251,25 @@ export class GroupsService {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2034'
     );
+  }
+
+  private async getUserForMembershipProvisioning(
+    userId: string,
+  ): Promise<{ email: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+
+    return user;
+  }
+
+  private buildVirtualAccountName(groupName: string, email: string): string {
+    const emailName = email.split('@')[0] || 'member';
+    return `${groupName} ${emailName}`.slice(0, 100);
   }
 }

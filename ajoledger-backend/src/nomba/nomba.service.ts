@@ -20,9 +20,33 @@ export interface NombaVirtualAccount {
   bankName: string;
 }
 
+export interface NombaStaticVirtualAccount {
+  accountReference: string;
+  accountNumber: string;
+  accountName: string;
+  bankName: string;
+}
+
 export interface NombaBankTransferResult {
   transactionRef: string;
   status: string; // SUCCESS | PENDING_BILLING | REFUND
+}
+
+interface NombaApiResponse<T> {
+  code: string;
+  description?: string;
+  data: T;
+}
+
+interface NombaVirtualAccountResponseData {
+  accountId?: string;
+  accountReference?: string;
+  accountRef?: string;
+  bankAccountNumber?: string;
+  accountNumber?: string;
+  bankAccountName?: string;
+  accountName?: string;
+  bankName?: string;
 }
 
 /**
@@ -169,6 +193,61 @@ export class NombaService {
     };
   }
 
+  /**
+   * Creates a static virtual account for one membership inside a group vault.
+   * The Nomba account reference is exactly the Membership.id so webhook
+   * aliasAccountReference can route inflows without ambiguity.
+   */
+  async createStaticVirtualAccount(params: {
+    membershipId: string;
+    groupSubaccountId: string;
+    customerEmail: string;
+    customerName: string;
+    bvn?: string;
+  }): Promise<NombaStaticVirtualAccount> {
+    const response = await firstValueFrom(
+      this.httpService.post<NombaApiResponse<NombaVirtualAccountResponseData>>(
+        `${this.baseUrl}/v1/accounts/virtual`,
+        {
+          accountId: params.groupSubaccountId,
+          accountRef: params.membershipId,
+          accountName: params.customerName,
+          email: params.customerEmail,
+          ...(params.bvn ? { bvn: params.bvn } : {}),
+          currency: 'NGN',
+        },
+        { headers: await this.authHeaders() },
+      ),
+    );
+
+    this.assertNombaSuccess(response.data, 'accounts/virtual/membership');
+
+    const d = response.data.data;
+    const returnedReference = d.accountReference ?? d.accountRef;
+
+    if (returnedReference && returnedReference !== params.membershipId) {
+      this.logger.error(
+        `Nomba returned mismatched account reference. expected=${params.membershipId} actual=${returnedReference}`,
+      );
+      throw new InternalServerErrorException(
+        'Payment provider returned an invalid virtual account reference.',
+      );
+    }
+
+    return {
+      accountReference: returnedReference ?? params.membershipId,
+      accountNumber:
+        d.bankAccountNumber ??
+        d.accountNumber ??
+        this.throwMissingNombaField('accountNumber'),
+      accountName:
+        d.bankAccountName ??
+        d.accountName ??
+        this.throwMissingNombaField('accountName'),
+      bankName: d.bankName ?? this.throwMissingNombaField('bankName'),
+    };
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Bank Transfer (Payout Disbursement)
   // ─────────────────────────────────────────────────────────────
@@ -285,6 +364,13 @@ export class NombaService {
     }
 
     return amountKobo;
+  }
+
+  private throwMissingNombaField(field: string): never {
+    this.logger.error(`Nomba response missing required field: ${field}`);
+    throw new InternalServerErrorException(
+      'Payment provider returned an incomplete virtual account response.',
+    );
   }
 
   /**

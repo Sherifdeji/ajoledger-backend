@@ -87,13 +87,20 @@ model SavingsGroup {
 }
 
 model Membership {
-  id         String     @id @default(uuid())
-  role       MemberRole @default(CONTRIBUTOR)
+  id   String     @id @default(uuid())
+  role MemberRole @default(CONTRIBUTOR)
   /// Position in the payout queue (1-indexed).
   /// Invariant: SavingsCycle.currentRound == Membership.payoutTurn
   /// identifies the active beneficiary for the current round.
-  payoutTurn Int        @map("payout_turn")
-  joinedAt   DateTime   @default(now()) @map("joined_at")
+  payoutTurn Int      @map("payout_turn")
+  joinedAt   DateTime @default(now()) @map("joined_at")
+
+  /// Static Nomba virtual account assigned to this member for this group.
+  /// Webhook transaction.aliasAccountReference MUST equal nombaAccountReference.
+  virtualAccountNumber String @unique @map("virtual_account_number")
+  virtualBankName      String @map("virtual_bank_name")
+  virtualAccountName   String @map("virtual_account_name")
+  nombaAccountReference String @unique @map("nomba_account_reference")
 
   group   SavingsGroup @relation(fields: [groupId], references: [id])
   groupId String       @map("group_id")
