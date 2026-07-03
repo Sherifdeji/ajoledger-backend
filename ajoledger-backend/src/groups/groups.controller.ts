@@ -8,6 +8,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { GroupsService } from './groups.service';
@@ -18,6 +19,8 @@ interface RequestWithUser extends Request {
   user: AuthenticatedUser;
 }
 
+@ApiTags('Groups')
+@ApiBearerAuth('jwt')
 @Controller('groups')
 @UseGuards(JwtAuthGuard)
 export class GroupsController {
@@ -25,6 +28,7 @@ export class GroupsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new savings group and provision its Nomba virtual account' })
   async createGroup(
     @Request() req: RequestWithUser,
     @Body() dto: CreateGroupDto,
@@ -35,6 +39,7 @@ export class GroupsController {
 
   @Post(':id/join')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Join an existing savings group using an invite code' })
   async joinGroup(
     @Request() req: RequestWithUser,
     @Param('id') groupId: string,
@@ -48,3 +53,4 @@ export class GroupsController {
     return { message: 'Successfully joined the group.', data };
   }
 }
+

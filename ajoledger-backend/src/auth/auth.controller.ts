@@ -7,6 +7,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -19,12 +20,14 @@ interface RequestWithUser extends Request {
   user: AuthenticatedUser;
 }
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new user account' })
   async register(@Body() dto: RegisterDto) {
     const data = await this.authService.register(dto.email, dto.password);
     return { message: 'Registration successful.', data };
@@ -32,6 +35,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login and receive a JWT access token' })
   async login(@Body() dto: LoginDto) {
     const data = await this.authService.login(dto.email, dto.password);
     return { message: 'Login successful.', data };
@@ -41,7 +45,9 @@ export class AuthController {
 
   @Post('setup-transaction-pin')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set up a 4-digit Transaction PIN for the authenticated user' })
   async setupTransactionPin(
     @Request() req: RequestWithUser,
     @Body() dto: SetupTransactionPinDto,
@@ -55,7 +61,9 @@ export class AuthController {
 
   @Post('verify-transaction')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify the Transaction PIN (UI pre-flight check)' })
   async verifyTransaction(
     @Request() req: RequestWithUser,
     @Body() dto: VerifyTransactionPinDto,

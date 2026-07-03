@@ -8,6 +8,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { CreateCycleDto } from './dto/create-cycle.dto';
@@ -17,6 +18,8 @@ interface RequestWithUser extends Request {
   user: AuthenticatedUser;
 }
 
+@ApiTags('Cycles')
+@ApiBearerAuth('jwt')
 @Controller('groups/:id/cycles')
 @UseGuards(JwtAuthGuard)
 export class CyclesController {
@@ -24,6 +27,7 @@ export class CyclesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Start a new savings cycle for a group (Coordinator only)' })
   async createCycle(
     @Request() req: RequestWithUser,
     @Param('id') groupId: string,
@@ -33,3 +37,4 @@ export class CyclesController {
     return { message: 'Savings cycle started successfully.', data };
   }
 }
+

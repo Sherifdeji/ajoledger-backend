@@ -6,6 +6,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   NombaWebhookPayload,
   NombaWebhookResult,
@@ -13,6 +14,7 @@ import type {
 import { NombaWebhookGuard } from './guards/nomba-webhook.guard';
 import { WebhooksService } from './webhooks.service';
 
+@ApiTags('Webhooks')
 @Controller('webhooks')
 export class WebhooksController {
   constructor(private readonly webhooksService: WebhooksService) {}
@@ -20,6 +22,9 @@ export class WebhooksController {
   @Post('nomba')
   @UseGuards(NombaWebhookGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Nomba payment webhook receiver (HMAC-authenticated — not for manual testing)',
+  })
   async handleNombaWebhook(
     @Body() payload: NombaWebhookPayload,
   ): Promise<{ message: string; data: NombaWebhookResult }> {
@@ -27,3 +32,4 @@ export class WebhooksController {
     return { message: 'Webhook received.', data };
   }
 }
+
