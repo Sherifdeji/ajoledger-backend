@@ -92,17 +92,26 @@ Day 1 — Foundation, Identity & Group Lifecycle
 - [ ] **Milestone 6: NombaWebhookGuard + WebhooksModule**
   - Create `src/webhooks/guards/nomba-webhook.guard.ts`
     - Implements `CanActivate`
-    - Reads raw request body (requires raw body parsing set up in Milestone 1)
-    - Computes `HMAC-SHA256(rawBody, NOMBA_WEBHOOK_SECRET)` using Node.js `crypto`
-    - Compares result to `nomba-signature` header using `crypto.timingSafeEqual` (prevents timing attacks)
+    - Verifies `nomba-signature` and `nomba-timestamp`
+    - Computes `HMAC-SHA256` with the official Nomba formula:
+      `event_type:requestId:merchant.userId:merchant.walletId:transaction.transactionId:transaction.type:transaction.time:transaction.responseCode:nomba-timestamp`
+    - Compares the generated Base64 signature to `nomba-signature` using `crypto.timingSafeEqual`
     - Throws `UnauthorizedException` if mismatch — response goes through global exception filter
   - Create `src/webhooks/webhooks.module.ts`, `webhooks.controller.ts`, `webhooks.service.ts`
+  - Update `NombaService`:
+    - `accountId` header must always be the parent account ID
+    - group/team subaccount IDs must only be sent in request bodies or query parameters
+    - outbound Nomba amounts convert from integer kobo to decimal naira
+    - inbound webhook amounts convert from decimal naira to integer kobo
   - `WebhooksService.handlePaymentEvent()`:
-    1. Parse Nomba webhook payload (event type: payment received)
-    2. Match `nomba_transaction_ref` to existing `Payment` record (idempotency check — skip if already processed)
-    3. Update `Contribution` status to `PAID`
-    4. Update `Payment` status to `SUCCESS`
-    5. Check if all contributions for the current round are paid → if yes, trigger payout eligibility flag
+    1. Process only `payment_success` virtual account inflows (`vact_transfer`)
+    2. Use `transaction.aliasAccountReference` to find the unique `Membership`
+    3. Find that membership's group's active `SavingsCycle`
+    4. Find the membership's single `PENDING` contribution for the active round
+    5. Verify webhook amount matches `SavingsCycle.contributionAmountKobo`
+    6. Create immutable successful `Payment` ledger record linked to `contribution_id`
+    7. Mark `Contribution` status as `PAID`
+    8. Use `Payment.nombaTransactionRef` for idempotency and ignore duplicate webhooks
   - Expose: `POST /api/v1/webhooks/nomba` — **protected by `NombaWebhookGuard` only** (no JWT)
   - Verify: valid HMAC passes; tampered payload or wrong key returns 401; duplicate event is idempotent (no double-update)
 

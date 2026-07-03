@@ -42,7 +42,7 @@ export class NombaService {
   private readonly baseUrl: string;
   private readonly clientId: string;
   private readonly clientSecret: string;
-  private readonly accountId: string;
+  private readonly parentAccountId: string;
 
   /** In-memory token cache — sufficient for a single-instance hackathon server. */
   private tokenCache: NombaTokenCache | null = null;
@@ -56,7 +56,9 @@ export class NombaService {
     this.clientSecret = this.configService.getOrThrow<string>(
       'NOMBA_CLIENT_SECRET',
     );
-    this.accountId = this.configService.getOrThrow<string>('NOMBA_ACCOUNT_ID');
+    this.parentAccountId = this.configService.getOrThrow<string>(
+      'NOMBA_PARENT_ACCOUNT_ID',
+    );
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -106,7 +108,7 @@ export class NombaService {
       this.httpService.post(
         `${this.baseUrl}/v1/auth/token/refresh`,
         { refreshToken },
-        { headers: await this.authHeaders() },
+        { headers: this.parentAccountHeaders(this.tokenCache?.accessToken) },
       ),
     );
 
@@ -190,7 +192,7 @@ export class NombaService {
       this.httpService.post(
         `${this.baseUrl}/v2/transfers/bank`,
         {
-          amount: params.amount,
+          amount: this.koboToNombaAmount(params.amount),
           currency: 'NGN',
           destinationBankCode: params.destinationBankCode,
           destinationAccountNumber: params.destinationAccountNumber,
@@ -222,11 +224,67 @@ export class NombaService {
 
   private async authHeaders(): Promise<Record<string, string>> {
     const token = await this.getAccessToken();
+    return this.parentAccountHeaders(token);
+  }
+
+  private parentAccountHeaders(token?: string): Record<string, string> {
     return {
-      Authorization: `Bearer ${token}`,
-      accountId: this.accountId,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      accountId: this.parentAccountId,
       'Content-Type': 'application/json',
     };
+  }
+
+  koboToNombaAmount(amountKobo: number): number {
+    if (!Number.isInteger(amountKobo) || amountKobo <= 0) {
+      throw new InternalServerErrorException(
+        'Invalid internal payment amount.',
+      );
+    }
+
+    return Number((amountKobo / 100).toFixed(2));
+  }
+
+  nombaAmountToKobo(amount: number | string): number {
+    if (typeof amount === 'string') {
+      return this.decimalStringToKobo(amount);
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new InternalServerErrorException(
+        'Invalid payment provider amount.',
+      );
+    }
+
+    const amountKobo = Math.round(amount * 100);
+    if (Math.abs(amount * 100 - amountKobo) > Number.EPSILON * 100) {
+      throw new InternalServerErrorException(
+        'Payment provider amount has invalid precision.',
+      );
+    }
+
+    return amountKobo;
+  }
+
+  private decimalStringToKobo(amount: string): number {
+    const normalized = amount.trim();
+
+    if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+      throw new InternalServerErrorException(
+        'Payment provider amount has invalid precision.',
+      );
+    }
+
+    const [nairaPart, koboPart = ''] = normalized.split('.');
+    const amountKobo = Number(nairaPart) * 100 + Number(koboPart.padEnd(2, '0'));
+
+    if (!Number.isSafeInteger(amountKobo) || amountKobo <= 0) {
+      throw new InternalServerErrorException(
+        'Invalid payment provider amount.',
+      );
+    }
+
+    return amountKobo;
   }
 
   /**
