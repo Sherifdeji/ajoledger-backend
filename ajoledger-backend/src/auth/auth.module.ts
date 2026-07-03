@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -9,7 +9,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
   imports: [
-    UsersModule,
+    // forwardRef required: AuthModule imports UsersModule, and UsersModule
+    // imports AuthModule (for AuthService in UsersController). Both sides
+    // must use forwardRef() for NestJS to resolve the circular graph.
+    forwardRef(() => UsersModule),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -32,3 +35,4 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   exports: [AuthService],
 })
 export class AuthModule {}
+

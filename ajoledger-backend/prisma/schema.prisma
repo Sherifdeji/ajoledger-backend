@@ -61,6 +61,12 @@ model User {
   transactionPinHash String?  @map("transaction_pin_hash")
   createdAt          DateTime @default(now()) @map("created_at")
 
+  /// Payout bank details — set via PATCH /api/v1/users/payout-settings.
+  /// Required before the PayoutsService can disburse funds to this user.
+  payoutBankCode      String? @map("payout_bank_code")
+  payoutAccountNumber String? @map("payout_account_number")
+  payoutAccountName   String? @map("payout_account_name")
+
   ownedGroups SavingsGroup[]
   memberships Membership[]
 
