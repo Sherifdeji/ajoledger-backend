@@ -57,7 +57,7 @@ Authenticates a user using their phone number and Login PIN.
 
 ---
 
-## POST /auth/verify-transaction
+## POST /auth/verify-transaction-pin
 
 Verifies the user's Transaction PIN before authorizing a financial operation.
 

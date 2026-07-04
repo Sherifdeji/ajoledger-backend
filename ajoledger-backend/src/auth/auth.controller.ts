@@ -47,7 +47,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('jwt')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Set up a 4-digit Transaction PIN for the authenticated user' })
+  @ApiOperation({
+    summary: 'Set up a 4-digit Transaction PIN for the authenticated user',
+  })
   async setupTransactionPin(
     @Request() req: RequestWithUser,
     @Body() dto: SetupTransactionPinDto,
@@ -59,7 +61,7 @@ export class AuthController {
     return { message: 'Transaction PIN configured successfully.', data };
   }
 
-  @Post('verify-transaction')
+  @Post('verify-transaction-pin')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('jwt')
   @HttpCode(HttpStatus.OK)
