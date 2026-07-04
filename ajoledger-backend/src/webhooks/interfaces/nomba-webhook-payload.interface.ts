@@ -47,4 +47,6 @@ export interface NombaWebhookResult {
   reason?: string;
   paymentId?: string;
   contributionId?: string;
+  payoutId?: string;
 }
+

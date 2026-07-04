@@ -297,6 +297,35 @@ export class NombaService {
     };
   }
 
+  /**
+   * Disburses an Ajo cycle payout to the round winner's bank account.
+   *
+   * Thin domain-named wrapper over initiateBankTransfer() — no logic duplication.
+   * Callers must pass amountKobo AFTER the ₦20 (2000 kobo) network fee deduction.
+   *
+   * Returns status: SUCCESS | PENDING_BILLING | REFUND
+   * - SUCCESS: transfer complete; webhook confirmation is advisory.
+   * - PENDING_BILLING: transfer queued; wait for payout_success webhook to advance round.
+   * - REFUND: transfer failed and refunded; safe to retry after investigation.
+   */
+  async disbursePayout(params: {
+    merchantTxRef: string;
+    amountKobo: number;
+    bankCode: string;
+    accountNumber: string;
+    accountName: string;
+    narration: string;
+  }): Promise<NombaBankTransferResult> {
+    return this.initiateBankTransfer({
+      merchantTxRef: params.merchantTxRef,
+      amount: params.amountKobo,
+      destinationBankCode: params.bankCode,
+      destinationAccountNumber: params.accountNumber,
+      destinationAccountName: params.accountName,
+      narration: params.narration,
+    });
+  }
+
   // ─────────────────────────────────────────────────────────────
   // Internal helpers
   // ─────────────────────────────────────────────────────────────

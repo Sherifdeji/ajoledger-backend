@@ -160,12 +160,15 @@ model Contribution {
 }
 
 model Payout {
-  id             String       @id @default(uuid())
-  /// Total disbursement in kobo: contributionAmountKobo × memberCount
-  amountKobo     Int          @map("amount_kobo")
-  status         PayoutStatus @default(PENDING)
-  nombaReference String?      @map("nomba_reference")
-  paidAt         DateTime?    @map("paid_at")
+  id         String       @id @default(uuid())
+  /// Total disbursement in kobo: (contributionAmountKobo × totalRounds) − 2000 (₦20 network fee).
+  /// The ₦20 deduction is disclosed in AjoLedger's Terms & Conditions.
+  amountKobo Int          @map("amount_kobo")
+  status     PayoutStatus @default(PENDING)
+  /// Our generated reference sent to Nomba as merchantTxRef (format: PAYOUT-{cycleId}-R{round}).
+  /// Unique — used for idempotency on both initiation and payout_success webhook lookup.
+  merchantTxRef String? @unique @map("merchant_tx_ref")
+  paidAt        DateTime? @map("paid_at")
 
   cycle   SavingsCycle @relation(fields: [cycleId], references: [id])
   cycleId String       @map("cycle_id")
