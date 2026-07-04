@@ -1,7 +1,23 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdatePayoutSettingsDto } from './dto/update-payout-settings.dto';
+import { SetupBankDto } from './dto/setup-bank.dto';
+
+/** Shared Prisma select that strips all credential hashes from user responses. */
+const SAFE_USER_SELECT = {
+  id: true,
+  email: true,
+  createdAt: true,
+  payoutBankCode: true,
+  payoutAccountNumber: true,
+  payoutAccountName: true,
+  // passwordHash and transactionPinHash deliberately excluded
+} as const;
 
 /**
  * Thin data-access layer for User records.
@@ -37,7 +53,52 @@ export class UsersService {
   }
 
   /**
-   * Persist payout bank details for a user.
+   * First-time bank detail setup (onboarding).
+   *
+   * Uses an atomic updateMany with `payoutBankCode: null` guard to prevent
+   * overwriting existing bank details without a PIN. This eliminates the
+   * TOCTOU race condition that a check-then-update pattern would introduce.
+   *
+   * Throws:
+   *  - NotFoundException    if the userId doesn't exist in the DB
+   *  - BadRequestException  if bank details are already configured
+   */
+  async setupBankDetails(
+    userId: string,
+    dto: SetupBankDto,
+  ): Promise<Omit<User, 'passwordHash' | 'transactionPinHash'>> {
+    const result = await this.prisma.user.updateMany({
+      where: { id: userId, payoutBankCode: null },
+      data: {
+        payoutBankCode: dto.bankCode,
+        payoutAccountNumber: dto.accountNumber,
+        payoutAccountName: dto.accountName,
+      },
+    });
+
+    if (result.count === 0) {
+      // Either user doesn't exist, or bank details already set.
+      // Disambiguate with a read to surface the correct error.
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+      if (!user) {
+        throw new NotFoundException('User not found.');
+      }
+
+      throw new BadRequestException(
+        'Bank details already configured. Please use the profile settings to update them.',
+      );
+    }
+
+    // Re-fetch with safe select — updateMany does not support inline select
+    return this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: SAFE_USER_SELECT,
+    });
+  }
+
+  /**
+   * Updates payout bank details for a user (post-onboarding profile update).
    * PIN verification MUST be performed by the caller before invoking this method.
    * Returns the updated user with credential hashes explicitly excluded.
    */
@@ -52,16 +113,7 @@ export class UsersService {
         payoutAccountNumber: dto.accountNumber,
         payoutAccountName: dto.accountName,
       },
-      select: {
-        id: true,
-        email: true,
-        createdAt: true,
-        payoutBankCode: true,
-        payoutAccountNumber: true,
-        payoutAccountName: true,
-        // passwordHash and transactionPinHash deliberately excluded
-      },
+      select: SAFE_USER_SELECT,
     });
   }
 }
-

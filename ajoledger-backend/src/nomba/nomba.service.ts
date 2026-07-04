@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -70,6 +71,13 @@ export class NombaService {
 
   /** In-memory token cache — sufficient for a single-instance hackathon server. */
   private tokenCache: NombaTokenCache | null = null;
+
+  /**
+   * In-memory bank list cache.
+   * Bank codes change at most a few times per year — a server restart clears
+   * the cache, which is acceptable for a hackathon single-instance setup.
+   */
+  private cachedBanks: { bankCode: string; bankName: string }[] = [];
 
   constructor(
     private readonly httpService: HttpService,
@@ -246,6 +254,82 @@ export class NombaService {
         this.throwMissingNombaField('accountName'),
       bankName: d.bankName ?? this.throwMissingNombaField('bankName'),
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Bank Utilities (List + Account Resolution)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Returns the list of supported Nigerian banks with their CBN bank codes.
+   * Result is cached in-memory after the first successful call to avoid
+   * hitting Nomba rate limits on every app load.
+   */
+  async getBanks(): Promise<{ bankCode: string; bankName: string }[]> {
+    if (this.cachedBanks.length > 0) {
+      return this.cachedBanks;
+    }
+
+    const response = await firstValueFrom(
+      this.httpService.get(`${this.baseUrl}/v1/transfers/banks`, {
+        headers: await this.authHeaders(),
+      }),
+    );
+
+    this.assertNombaSuccess(response.data, 'transfers/banks');
+
+    // Nomba returns the bank list under data — map to our clean shape
+    const banks: { bankCode: string; bankName: string }[] = (
+      response.data.data as Array<Record<string, unknown>>
+    ).map((b) => ({
+      bankCode: String(b.bankCode ?? b.bank_code ?? ''),
+      bankName: String(b.bankName ?? b.bank_name ?? ''),
+    }));
+
+    this.cachedBanks = banks;
+    this.logger.log(`Bank list cached. count=${banks.length}`);
+    return banks;
+  }
+
+  /**
+   * Resolves an account name from a bank code + NUBAN account number.
+   * Throws BadRequestException if Nomba cannot find the account —
+   * this is a user-input error, not a server fault.
+   */
+  async resolveAccount(
+    bankCode: string,
+    accountNumber: string,
+  ): Promise<string> {
+    const response = await firstValueFrom(
+      this.httpService.post(
+        `${this.baseUrl}/v1/transfers/bank/lookup`,
+        { account_number: accountNumber, bank_code: bankCode },
+        { headers: await this.authHeaders() },
+      ),
+    );
+
+    if (response.data.code !== '00') {
+      this.logger.warn(
+        `Account resolution failed. bankCode=${bankCode} account=${accountNumber} code=${response.data.code}`,
+      );
+      throw new BadRequestException(
+        'Account not found. Check the bank code and account number and try again.',
+      );
+    }
+
+    const accountName: string | undefined =
+      response.data.data?.accountName ?? response.data.data?.account_name;
+
+    if (!accountName) {
+      this.logger.error(
+        `Nomba resolved account but returned no name. bankCode=${bankCode} account=${accountNumber}`,
+      );
+      throw new InternalServerErrorException(
+        'Payment provider resolved the account but did not return a name.',
+      );
+    }
+
+    return accountName;
   }
 
   // ─────────────────────────────────────────────────────────────

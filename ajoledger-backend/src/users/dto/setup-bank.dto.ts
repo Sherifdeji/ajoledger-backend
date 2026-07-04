@@ -1,7 +1,7 @@
-import { IsString, Length, Matches } from 'class-validator';
+import { IsString, Length } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class UpdatePayoutSettingsDto {
+export class SetupBankDto {
   @ApiProperty({
     example: '058',
     description: 'CBN bank code for the destination bank (e.g. 058 = GTBank)',
@@ -20,19 +20,11 @@ export class UpdatePayoutSettingsDto {
   accountNumber: string;
 
   @ApiProperty({
-    example: 'Sherif Ibrahim',
-    description: 'Account name as it appears on the destination bank account',
+    example: 'ADAM ABDULKAREEM',
+    description:
+      'Account name as resolved by POST /users/resolve-account. ' +
+      'Always resolve this value from Nomba before calling this endpoint.',
   })
   @IsString()
   accountName: string;
-
-  @ApiProperty({
-    example: '1234',
-    description:
-      'Your 4-digit Transaction PIN — required to authorise bank detail changes',
-    pattern: '^\\d{4}$',
-  })
-  @IsString()
-  @Matches(/^\d{4}$/, { message: 'transactionPin must be exactly 4 digits.' })
-  transactionPin: string;
 }
