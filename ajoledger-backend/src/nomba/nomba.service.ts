@@ -320,20 +320,31 @@ export class NombaService {
 
       this.assertNombaSuccess(response.data, 'transfers/banks');
 
-      // Nomba structure: { code: "00", data: { results: [{ code: "058", name: "GTBank" }] } }
-      const rawBanksArray = response.data.data.results as Array<
-        Record<string, unknown>
-      >;
+      // Defensive extraction — Nomba's exact nesting depth varies between
+      // environments. Try data.results first, then data[], then the payload root.
+      const payload = response.data;
+      const rawBanksArray =
+        payload?.data?.results ?? payload?.data ?? payload ?? [];
 
-      const banks: { bankCode: string; bankName: string }[] =
-        rawBanksArray.map((b) => ({
-          bankCode: String(b.code ?? ''),
-          bankName: String(b.name ?? ''),
-        }));
+      if (!Array.isArray(rawBanksArray)) {
+        this.logger.error(
+          `Nomba banks endpoint returned an unexpected structure: ${JSON.stringify(payload)}`,
+        );
+        // Return empty array — mobile app sees an empty list rather than a 500
+        return [];
+      }
+
+      const banks: { bankCode: string; bankName: string }[] = (
+        rawBanksArray as Array<Record<string, unknown>>
+      ).map((b) => ({
+        bankCode: String(b.code ?? ''),
+        bankName: String(b.name ?? ''),
+      }));
 
       this.cachedBanks = banks;
       this.logger.log(`Bank list cached. count=${banks.length}`);
       return banks;
+
 
     } catch (error: unknown) {
       const axiosError = error as {
