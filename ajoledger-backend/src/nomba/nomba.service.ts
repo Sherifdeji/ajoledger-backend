@@ -270,8 +270,9 @@ export class NombaService {
       return this.cachedBanks;
     }
 
+    // Nomba API: GET /v1/transfers/bank  (singular — see NOMBA_API.md)
     const response = await firstValueFrom(
-      this.httpService.get(`${this.baseUrl}/v1/transfers/banks`, {
+      this.httpService.get(`${this.baseUrl}/v1/transfers/bank`, {
         headers: await this.authHeaders(),
       }),
     );
