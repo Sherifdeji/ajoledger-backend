@@ -367,42 +367,71 @@ export class NombaService {
   async resolveAccount(
     bankCode: string,
     accountNumber: string,
-  ): Promise<string> {
-    const response = await firstValueFrom(
-      this.httpService.post(
-        `${this.baseUrl}/v1/transfers/bank/lookup`,
-        { account_number: accountNumber, bank_code: bankCode },
-        { headers: await this.authHeaders() },
-      ),
-    );
+  ): Promise<any> {
+    const token = await this.getAccessToken();
+    const payload = {
+      accountNumber: String(accountNumber),
+      bankCode: String(bankCode),
+    };
 
-    if (response.data.code !== '00') {
-      this.logger.warn(
-        `Account resolution failed. bankCode=${bankCode} account=${accountNumber} code=${response.data.code}`,
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.baseUrl}/v1/transfers/bank/lookup`,
+          payload,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'accountId': this.parentAccountId,
+            },
+          },
+        ),
       );
-      throw new BadRequestException(
-        'Account not found. Check the bank code and account number and try again.',
-      );
+
+      if (response.data.code !== '00') {
+        this.logger.warn(
+          `Account resolution failed. bankCode=${bankCode} account=${accountNumber} ` +
+            `code=${response.data.code} description=${response.data.description ?? ''}`,
+        );
+        throw new BadRequestException(
+          'Account not found. Check the bank code and account number and try again.',
+        );
+      }
+
+      const responseData = response.data.data;
+      const accountName = responseData?.accountName ?? responseData?.account_name;
+
+      if (!accountName) {
+        this.logger.error(
+          `Nomba resolved account but returned no name. bankCode=${bankCode} account=${accountNumber} ` +
+            `raw=${JSON.stringify(response.data.data)}`,
+        );
+        throw new InternalServerErrorException(
+          'Payment provider resolved the account but did not return a name.',
+        );
+      }
+
+      return responseData;
+    } catch (error: unknown) {
+      const axiosError = error as {
+        response?: { data?: unknown; status?: number };
+        message?: string;
+      };
+      if (axiosError.response?.status) {
+        this.logger.error(
+          `Nomba bank/lookup HTTP ${axiosError.response.status}:`,
+          axiosError.response.data,
+        );
+      }
+      throw error;
     }
-
-    const accountName: string | undefined =
-      response.data.data?.accountName ?? response.data.data?.account_name;
-
-    if (!accountName) {
-      this.logger.error(
-        `Nomba resolved account but returned no name. bankCode=${bankCode} account=${accountNumber}`,
-      );
-      throw new InternalServerErrorException(
-        'Payment provider resolved the account but did not return a name.',
-      );
-    }
-
-    return accountName;
   }
 
   // ─────────────────────────────────────────────────────────────
   // Bank Transfer (Payout Disbursement)
   // ─────────────────────────────────────────────────────────────
+
 
   /**
    * Initiates a bank transfer from the group's virtual account to a beneficiary.

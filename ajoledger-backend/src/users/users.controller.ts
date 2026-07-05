@@ -112,13 +112,15 @@ export class UsersController {
       'Resolve account name from bank code + account number (call before saving bank details)',
   })
   async resolveAccount(@Body() dto: ResolveAccountDto) {
-    const accountName = await this.nombaService.resolveAccount(
+    const lookupData = await this.nombaService.resolveAccount(
       dto.bankCode,
       dto.accountNumber,
     );
     return {
       message: 'Account resolved successfully.',
-      data: { accountName },
+      data: {
+        accountName: lookupData.accountName ?? lookupData.account_name,
+      },
     };
   }
 
