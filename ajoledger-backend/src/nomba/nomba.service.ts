@@ -124,14 +124,26 @@ export class NombaService {
   }
 
   private async issueToken(): Promise<string> {
+    // accountId header is required on ALL Nomba requests, including token issuance.
+    // Omitting it causes a 400 "JWT Signature Error" before a token is ever returned.
     const response = await firstValueFrom(
-      this.httpService.post(`${this.baseUrl}/v1/auth/token/issue`, {
-        clientId: this.clientId,
-        clientSecret: this.clientSecret,
-      }),
+      this.httpService.post(
+        `${this.baseUrl}/v1/auth/token/issue`,
+        {
+          clientId: this.clientId,
+          clientSecret: this.clientSecret,
+        },
+        {
+          headers: {
+            accountId: this.parentAccountId,
+            'Content-Type': 'application/json',
+          },
+        },
+      ),
     );
 
     this.assertNombaSuccess(response.data, 'token/issue');
+    this.logger.log('Nomba access token issued successfully.');
     return this.cacheToken(response.data.data);
   }
 
@@ -148,16 +160,31 @@ export class NombaService {
     return this.cacheToken(response.data.data);
   }
 
-  private cacheToken(data: {
-    access_token: string;
-    refresh_token: string;
-    expiresAt: number;
-  }): string {
+  private cacheToken(data: Record<string, unknown>): string {
+    // Nomba may return either:
+    //   expires_in  — seconds from now (standard OAuth 2.0)
+    //   expiresAt   — absolute Unix seconds
+    // Handle both defensively. Log whichever field we receive.
+    let expiresAtMs: number;
+
+    if (typeof data.expires_in === 'number') {
+      expiresAtMs = Date.now() + data.expires_in * 1_000;
+      this.logger.log(`Token expires_in=${data.expires_in}s`);
+    } else if (typeof data.expiresAt === 'number') {
+      expiresAtMs = data.expiresAt * 1_000;
+      this.logger.log(`Token expiresAt=${data.expiresAt}`);
+    } else {
+      // Fallback: treat token as valid for 25 minutes (Nomba default is 30)
+      this.logger.warn(
+        'Nomba token response missing expiry field — defaulting to 25 min TTL.',
+      );
+      expiresAtMs = Date.now() + 25 * 60 * 1_000;
+    }
+
     this.tokenCache = {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      // Nomba returns expiresAt in seconds — convert to ms
-      expiresAt: data.expiresAt * 1000,
+      accessToken: data.access_token as string,
+      refreshToken: (data.refresh_token ?? '') as string,
+      expiresAt: expiresAtMs,
     };
     return this.tokenCache.accessToken;
   }
