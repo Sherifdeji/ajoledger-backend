@@ -53,6 +53,21 @@ export class UsersService {
   }
 
   /**
+   * Returns the current user's profile with payout bank details.
+   * payoutBankCode / payoutAccountNumber / payoutAccountName are null
+   * if not yet configured — the mobile app uses this to decide whether
+   * to show the bank setup modal.
+   */
+  async getProfile(
+    userId: string,
+  ): Promise<Omit<User, 'passwordHash' | 'transactionPinHash'> | null> {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      select: SAFE_USER_SELECT,
+    });
+  }
+
+  /**
    * First-time bank detail setup (onboarding).
    *
    * Uses an atomic updateMany with `payoutBankCode: null` guard to prevent

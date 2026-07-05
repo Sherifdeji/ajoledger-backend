@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Patch,
   Post,
   Request,
@@ -35,8 +36,50 @@ export class UsersController {
   ) {}
 
   // ─────────────────────────────────────────────────────────────
+  // Profile
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * GET /api/v1/users/me
+   *
+   * Returns the authenticated user's profile.
+   * The mobile app uses `payoutBankCode !== null` to determine whether
+   * the bank details setup modal should be shown on app load.
+   *
+   * Response (200):
+   * {
+   *   "success": true,
+   *   "message": "Profile retrieved successfully.",
+   *   "data": {
+   *     "id": "...",
+   *     "email": "...",
+   *     "payoutBankCode": null,          ← null = not configured → show modal
+   *     "payoutAccountNumber": null,
+   *     "payoutAccountName": null,
+   *     "createdAt": "..."
+   *   }
+   * }
+   */
+  @Get('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Get current user profile — check payoutBankCode to decide if bank setup modal is needed',
+  })
+  async getMe(@Request() req: RequestWithUser) {
+    const data = await this.usersService.getProfile(req.user.id);
+
+    if (!data) {
+      throw new NotFoundException('User not found.');
+    }
+
+    return { message: 'Profile retrieved successfully.', data };
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // Bank utilities
   // ─────────────────────────────────────────────────────────────
+
 
   /**
    * GET /api/v1/users/banks
