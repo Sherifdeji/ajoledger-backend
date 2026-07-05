@@ -125,26 +125,39 @@ export class NombaService {
 
   private async issueToken(): Promise<string> {
     // accountId header is required on ALL Nomba requests, including token issuance.
-    // Omitting it causes a 400 "JWT Signature Error" before a token is ever returned.
-    const response = await firstValueFrom(
-      this.httpService.post(
-        `${this.baseUrl}/v1/auth/token/issue`,
-        {
-          clientId: this.clientId,
-          clientSecret: this.clientSecret,
-        },
-        {
-          headers: {
-            accountId: this.parentAccountId,
-            'Content-Type': 'application/json',
+    // Payload must use snake_case keys + grant_type per Nomba's OAuth 2.0 spec.
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.baseUrl}/v1/auth/token/issue`,
+          {
+            grant_type: 'client_credentials',
+            client_id: this.clientId,
+            client_secret: this.clientSecret,
           },
-        },
-      ),
-    );
+          {
+            headers: {
+              accountId: this.parentAccountId,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
 
-    this.assertNombaSuccess(response.data, 'token/issue');
-    this.logger.log('Nomba access token issued successfully.');
-    return this.cacheToken(response.data.data);
+      this.assertNombaSuccess(response.data, 'token/issue');
+      this.logger.log('Nomba access token issued successfully.');
+      return this.cacheToken(response.data.data);
+    } catch (error: unknown) {
+      const axiosError = error as {
+        response?: { data?: unknown };
+        message?: string;
+      };
+      this.logger.error(
+        'Nomba token/issue failed:',
+        axiosError.response?.data ?? axiosError.message ?? error,
+      );
+      throw error;
+    }
   }
 
   private async refreshToken(refreshToken: string): Promise<string> {
@@ -298,25 +311,37 @@ export class NombaService {
     }
 
     // Nomba API: GET /v1/transfers/banks
-    const response = await firstValueFrom(
-      this.httpService.get(`${this.baseUrl}/v1/transfers/banks`, {
-        headers: await this.authHeaders(),
-      }),
-    );
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}/v1/transfers/banks`, {
+          headers: await this.authHeaders(),
+        }),
+      );
 
-    this.assertNombaSuccess(response.data, 'transfers/banks');
+      this.assertNombaSuccess(response.data, 'transfers/banks');
 
-    // Nomba returns the bank list under data — map to our clean shape
-    const banks: { bankCode: string; bankName: string }[] = (
-      response.data.data as Array<Record<string, unknown>>
-    ).map((b) => ({
-      bankCode: String(b.bankCode ?? b.bank_code ?? ''),
-      bankName: String(b.bankName ?? b.bank_name ?? ''),
-    }));
+      // Nomba returns the bank list under data — map to our clean shape
+      const banks: { bankCode: string; bankName: string }[] = (
+        response.data.data as Array<Record<string, unknown>>
+      ).map((b) => ({
+        bankCode: String(b.bankCode ?? b.bank_code ?? ''),
+        bankName: String(b.bankName ?? b.bank_name ?? ''),
+      }));
 
-    this.cachedBanks = banks;
-    this.logger.log(`Bank list cached. count=${banks.length}`);
-    return banks;
+      this.cachedBanks = banks;
+      this.logger.log(`Bank list cached. count=${banks.length}`);
+      return banks;
+    } catch (error: unknown) {
+      const axiosError = error as {
+        response?: { data?: unknown };
+        message?: string;
+      };
+      this.logger.error(
+        'Nomba transfers/banks failed:',
+        axiosError.response?.data ?? axiosError.message ?? error,
+      );
+      throw error;
+    }
   }
 
   /**
