@@ -320,17 +320,21 @@ export class NombaService {
 
       this.assertNombaSuccess(response.data, 'transfers/banks');
 
-      // Nomba returns the bank list under data — map to our clean shape
-      const banks: { bankCode: string; bankName: string }[] = (
-        response.data.data as Array<Record<string, unknown>>
-      ).map((b) => ({
-        bankCode: String(b.code ?? b.bankCode ?? b.bank_code ?? ''),
-        bankName: String(b.name ?? b.bankName ?? b.bank_name ?? ''),
-      }));
+      // Nomba structure: { code: "00", data: { results: [{ code: "058", name: "GTBank" }] } }
+      const rawBanksArray = response.data.data.results as Array<
+        Record<string, unknown>
+      >;
+
+      const banks: { bankCode: string; bankName: string }[] =
+        rawBanksArray.map((b) => ({
+          bankCode: String(b.code ?? ''),
+          bankName: String(b.name ?? ''),
+        }));
 
       this.cachedBanks = banks;
       this.logger.log(`Bank list cached. count=${banks.length}`);
       return banks;
+
     } catch (error: unknown) {
       const axiosError = error as {
         response?: { data?: unknown };
