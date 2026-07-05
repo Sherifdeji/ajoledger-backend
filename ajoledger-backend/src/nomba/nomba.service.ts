@@ -270,9 +270,9 @@ export class NombaService {
       return this.cachedBanks;
     }
 
-    // Nomba API: GET /v1/transfers/bank  (singular — see NOMBA_API.md)
+    // Nomba API: GET /v1/transfers/banks
     const response = await firstValueFrom(
-      this.httpService.get(`${this.baseUrl}/v1/transfers/bank`, {
+      this.httpService.get(`${this.baseUrl}/v1/transfers/banks`, {
         headers: await this.authHeaders(),
       }),
     );
@@ -469,7 +469,8 @@ export class NombaService {
     }
 
     const [nairaPart, koboPart = ''] = normalized.split('.');
-    const amountKobo = Number(nairaPart) * 100 + Number(koboPart.padEnd(2, '0'));
+    const amountKobo =
+      Number(nairaPart) * 100 + Number(koboPart.padEnd(2, '0'));
 
     if (!Number.isSafeInteger(amountKobo) || amountKobo <= 0) {
       throw new InternalServerErrorException(
