@@ -324,8 +324,8 @@ export class NombaService {
       const banks: { bankCode: string; bankName: string }[] = (
         response.data.data as Array<Record<string, unknown>>
       ).map((b) => ({
-        bankCode: String(b.bankCode ?? b.bank_code ?? ''),
-        bankName: String(b.bankName ?? b.bank_name ?? ''),
+        bankCode: String(b.code ?? b.bankCode ?? b.bank_code ?? ''),
+        bankName: String(b.name ?? b.bankName ?? b.bank_name ?? ''),
       }));
 
       this.cachedBanks = banks;
