@@ -99,13 +99,28 @@ export class CyclesService {
           const memberships = await tx.membership.findMany({
             where: { groupId },
             orderBy: { payoutTurn: 'asc' },
-            select: { id: true },
+            select: { id: true, payoutTurn: true },
           });
 
           if (memberships.length === 0) {
             throw new ConflictException(
               'A savings cycle requires at least one group member.',
             );
+          }
+
+          const hasUnassignedTurn = memberships.some((m) => m.payoutTurn === null);
+          if (hasUnassignedTurn) {
+            throw new ConflictException(
+              'Cannot start cycle: one or more members do not have a payout turn assigned. The group coordinator must assign payout turns first.',
+            );
+          }
+
+          for (let i = 0; i < memberships.length; i++) {
+            if (memberships[i].payoutTurn !== i + 1) {
+              throw new ConflictException(
+                'Cannot start cycle: payout turns are not sequential. The group coordinator must reassign payout turns.',
+              );
+            }
           }
 
           const cycle = await tx.savingsCycle.create({

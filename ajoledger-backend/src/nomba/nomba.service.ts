@@ -344,8 +344,6 @@ export class NombaService {
       this.cachedBanks = banks;
       this.logger.log(`Bank list cached. count=${banks.length}`);
       return banks;
-
-
     } catch (error: unknown) {
       const axiosError = error as {
         response?: { data?: unknown };
@@ -364,10 +362,7 @@ export class NombaService {
    * Throws BadRequestException if Nomba cannot find the account —
    * this is a user-input error, not a server fault.
    */
-  async resolveAccount(
-    bankCode: string,
-    accountNumber: string,
-  ): Promise<any> {
+  async resolveAccount(bankCode: string, accountNumber: string): Promise<any> {
     const token = await this.getAccessToken();
     const payload = {
       accountNumber: String(accountNumber),
@@ -381,9 +376,9 @@ export class NombaService {
           payload,
           {
             headers: {
-              'Authorization': `Bearer ${token}`,
+              Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
-              'accountId': this.parentAccountId,
+              accountId: this.parentAccountId,
             },
           },
         ),
@@ -400,7 +395,8 @@ export class NombaService {
       }
 
       const responseData = response.data.data;
-      const accountName = responseData?.accountName ?? responseData?.account_name;
+      const accountName =
+        responseData?.accountName ?? responseData?.account_name;
 
       if (!accountName) {
         this.logger.error(
@@ -431,7 +427,6 @@ export class NombaService {
   // ─────────────────────────────────────────────────────────────
   // Bank Transfer (Payout Disbursement)
   // ─────────────────────────────────────────────────────────────
-
 
   /**
    * Initiates a bank transfer from the group's virtual account to a beneficiary.

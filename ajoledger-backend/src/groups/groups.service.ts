@@ -9,6 +9,7 @@ import { MemberRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NombaService } from '../nomba/nomba.service';
 import { CreateGroupDto } from './dto/create-group.dto';
+import { AssignPayoutOrderDto } from './dto/assign-payout-order.dto';
 
 @Injectable()
 export class GroupsService {
@@ -76,7 +77,7 @@ export class GroupsService {
           groupId: newGroup.id,
           userId,
           role: MemberRole.COORDINATOR,
-          payoutTurn: 1,
+          payoutTurn: null,
           virtualAccountNumber: coordinatorVirtualAccount.accountNumber,
           virtualBankName: coordinatorVirtualAccount.bankName,
           virtualAccountName: coordinatorVirtualAccount.accountName,
@@ -96,24 +97,20 @@ export class GroupsService {
 
   async joinGroup(
     userId: string,
-    groupId: string,
     inviteCode: string,
   ): Promise<{ membershipId: string; groupId: string }> {
-    // Step 1: Verify the group exists and the invite code matches.
+    // Step 1: Verify the group exists by invite code.
     const group = await this.prisma.savingsGroup.findUnique({
-      where: { id: groupId },
+      where: { inviteCode },
     });
 
     if (!group) {
-      throw new NotFoundException('Savings group not found.');
-    }
-
-    if (group.inviteCode !== inviteCode) {
-      // Return a generic message — don't leak whether the code or the group ID is wrong.
       throw new NotFoundException(
         'Invalid invite code. Please check and try again.',
       );
     }
+
+    const groupId = group.id;
 
     if (!group.nombaAccountId) {
       throw new ConflictException(
@@ -151,68 +148,205 @@ export class GroupsService {
         customerName: this.buildVirtualAccountName(group.name, user.email),
       });
 
-    let membership: { id: string; groupId: string };
-
-    try {
-      // Step 2: Freeze membership once an active cycle exists, then assign
-      // next payoutTurn atomically under Serializable isolation.
-      membership = await this.prisma.$transaction(
-        async (tx) => {
-          const activeCycle = await tx.savingsCycle.findFirst({
-            where: { groupId, isActive: true },
-            select: { id: true },
-          });
-
-          if (activeCycle) {
-            throw new ConflictException(
-              'This group has an active savings cycle and is not accepting new members.',
-            );
-          }
-
-          const existingMembership = await tx.membership.findUnique({
-            where: { groupId_userId: { groupId, userId } },
-          });
-
-          if (existingMembership) {
-            throw new ConflictException(
-              'You are already a member of this group.',
-            );
-          }
-
-          const aggregate = await tx.membership.aggregate({
-            where: { groupId },
-            _max: { payoutTurn: true },
-          });
-
-          const nextTurn = (aggregate._max.payoutTurn ?? 0) + 1;
-
-          return tx.membership.create({
-            data: {
-              id: membershipId,
-              groupId,
-              userId,
-              role: MemberRole.CONTRIBUTOR,
-              payoutTurn: nextTurn,
-              virtualAccountNumber: membershipVirtualAccount.accountNumber,
-              virtualBankName: membershipVirtualAccount.bankName,
-              virtualAccountName: membershipVirtualAccount.accountName,
-              nombaAccountReference: membershipVirtualAccount.accountReference,
-            },
-          });
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    } catch (error) {
-      if (this.isSerializableTransactionConflict(error)) {
-        throw new ConflictException(
-          'The group membership changed concurrently. Please retry.',
-        );
-      }
-
-      throw error;
-    }
+    // Step 2: Create membership with a null payoutTurn.
+    const membership = await this.prisma.membership.create({
+      data: {
+        id: membershipId,
+        groupId,
+        userId,
+        role: MemberRole.CONTRIBUTOR,
+        payoutTurn: null,
+        virtualAccountNumber: membershipVirtualAccount.accountNumber,
+        virtualBankName: membershipVirtualAccount.bankName,
+        virtualAccountName: membershipVirtualAccount.accountName,
+        nombaAccountReference: membershipVirtualAccount.accountReference,
+      },
+    });
 
     return { membershipId: membership.id, groupId };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Fetch User Groups
+  // ─────────────────────────────────────────────────────────────
+
+  async getUserGroups(userId: string) {
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId },
+      include: {
+        group: {
+          include: {
+            memberships: true,
+            cycles: {
+              where: { isActive: true },
+              include: {
+                contributions: {
+                  where: { status: 'PAID' },
+                },
+              },
+            },
+          },
+        },
+        contributions: {
+          where: {
+            cycle: { isActive: true },
+          },
+        },
+      },
+    });
+
+    return memberships.map((m) => {
+      const activeCycle = m.group.cycles[0];
+      const memberCount = m.group.memberships.length;
+      
+      let potCollected = 0;
+      let myStatus = 'PENDING';
+      
+      if (activeCycle) {
+        potCollected = activeCycle.contributions.reduce(
+          (sum, c) => sum + activeCycle.contributionAmountKobo,
+          0,
+        );
+        
+        const myContributions = m.contributions.filter(c => c.roundNumber === activeCycle.currentRound);
+        if (myContributions.length > 0) {
+          myStatus = myContributions.every(c => c.status === 'PAID') ? 'PAID' : 'PARTIAL';
+        }
+      }
+
+      return {
+        id: m.group.id,
+        name: m.group.name,
+        inviteCode: m.group.inviteCode,
+        cycleDetails: {
+          currentCycle: activeCycle?.currentRound ?? 0,
+          contributionAmount: activeCycle?.contributionAmountKobo ?? 0,
+          potCollected,
+          potTarget: activeCycle ? activeCycle.contributionAmountKobo * memberCount : 0,
+          nextPayoutDate: activeCycle?.startedAt ?? null, // Simplification for hackathon
+        },
+        myDetails: {
+          position: m.payoutTurn,
+          status: myStatus,
+        },
+      };
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Fetch Group Details
+  // ─────────────────────────────────────────────────────────────
+
+  async getGroupDetails(userId: string, groupId: string) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('You are not a member of this group.');
+    }
+
+    const group = await this.prisma.savingsGroup.findUnique({
+      where: { id: groupId },
+      include: {
+        memberships: {
+          include: {
+            user: { select: { email: true } }
+          },
+          orderBy: { payoutTurn: 'asc' }
+        },
+        cycles: {
+          where: { isActive: true },
+          take: 1,
+        },
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found.');
+    }
+
+    return {
+      id: group.id,
+      name: group.name,
+      description: group.description,
+      inviteCode: group.inviteCode,
+      nombaAccountId: group.nombaAccountId,
+      activeCycle: group.cycles[0] ?? null,
+      members: group.memberships.map((m) => ({
+        membershipId: m.id,
+        email: m.user.email,
+        role: m.role,
+        payoutTurn: m.payoutTurn,
+      })),
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Admin Turn Assignment
+  // ─────────────────────────────────────────────────────────────
+
+  async assignPayoutOrder(
+    userId: string,
+    groupId: string,
+    dto: AssignPayoutOrderDto,
+  ) {
+    const adminMembership = await this.prisma.membership.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+    });
+
+    if (!adminMembership || adminMembership.role !== MemberRole.COORDINATOR) {
+      throw new ConflictException('Only the group coordinator can assign payout turns.');
+    }
+
+    const activeCycle = await this.prisma.savingsCycle.findFirst({
+      where: { groupId, isActive: true },
+    });
+
+    if (activeCycle) {
+      throw new ConflictException('Cannot reassign turns while a cycle is active.');
+    }
+
+    const members = await this.prisma.membership.findMany({
+      where: { groupId },
+      select: { id: true },
+    });
+
+    const memberIds = new Set(members.map(m => m.id));
+    
+    if (dto.assignments.length !== members.length) {
+      throw new ConflictException('You must assign exactly one turn to every member.');
+    }
+
+    const assignedTurns = new Set<number>();
+    
+    for (const assignment of dto.assignments) {
+      if (!memberIds.has(assignment.membershipId)) {
+        throw new ConflictException(`Membership ID ${assignment.membershipId} does not belong to this group.`);
+      }
+      if (assignedTurns.has(assignment.payoutTurn)) {
+        throw new ConflictException('Turns must be unique. Duplicate found.');
+      }
+      assignedTurns.add(assignment.payoutTurn);
+    }
+
+    // Check gapless 1..N
+    for (let i = 1; i <= members.length; i++) {
+      if (!assignedTurns.has(i)) {
+        throw new ConflictException(`Turn assignment is missing position ${i}. Turns must be sequential from 1 to ${members.length}.`);
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const assignment of dto.assignments) {
+        await tx.membership.update({
+          where: { id: assignment.membershipId },
+          data: { payoutTurn: assignment.payoutTurn },
+        });
+      }
+    });
+
+    return { success: true };
   }
 
   // ─────────────────────────────────────────────────────────────
