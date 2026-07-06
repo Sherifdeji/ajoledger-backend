@@ -1,4 +1,5 @@
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength, IsEnum, IsNumber, IsInt, Min } from 'class-validator';
+import { ContributionFrequency } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateGroupDto {
@@ -22,5 +23,31 @@ export class CreateGroupDto {
   @IsString()
   @MaxLength(500, { message: 'Description must not exceed 500 characters.' })
   description?: string;
+
+  @ApiProperty({
+    example: 'WEEKLY',
+    enum: ContributionFrequency,
+    description: 'The frequency of contributions',
+  })
+  @IsEnum(ContributionFrequency)
+  frequency: ContributionFrequency;
+
+  @ApiProperty({
+    example: 50000,
+    description: 'The required contribution amount per member in Naira (minimum ₦500)',
+    minimum: 500,
+  })
+  @IsNumber()
+  @Min(500, { message: 'Minimum contribution amount is ₦500.' })
+  contributionAmount: number;
+
+  @ApiProperty({
+    example: 10,
+    description: 'The total number of participants in the group (minimum 2)',
+    minimum: 2,
+  })
+  @IsInt()
+  @Min(2, { message: 'A group must have at least 2 participants.' })
+  numberOfParticipants: number;
 }
 

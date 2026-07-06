@@ -25,6 +25,12 @@ datasource db {
 // ENUMS
 // =============================================================
 
+enum ContributionFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
 enum MemberRole {
   COORDINATOR
   CONTRIBUTOR
@@ -81,6 +87,11 @@ model SavingsGroup {
   /// Nomba virtual account ID provisioned at group creation (1:1 mapping).
   /// Nullable only during the brief atomic window of group creation.
   nombaAccountId String?  @unique @map("nomba_account_id")
+  
+  frequency                     ContributionFrequency @map("frequency")
+  defaultContributionAmountKobo Int                   @map("default_contribution_amount_kobo")
+  maxParticipants               Int                   @map("max_participants")
+
   createdAt      DateTime @default(now()) @map("created_at")
 
   owner   User   @relation(fields: [ownerId], references: [id])
