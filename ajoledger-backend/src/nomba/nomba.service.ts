@@ -255,13 +255,13 @@ export class NombaService {
   }): Promise<NombaStaticVirtualAccount> {
     const response = await firstValueFrom(
       this.httpService.post<NombaApiResponse<NombaVirtualAccountResponseData>>(
-        `${this.baseUrl}/v1/accounts/virtual`,
+        `${this.baseUrl}/v1/accounts/virtual/${params.groupSubaccountId}`,
         {
-          accountId: params.groupSubaccountId,
           accountRef: params.membershipId,
           accountName: params.customerName,
           email: params.customerEmail,
-          ...(params.bvn ? { bvn: params.bvn } : {}),
+          phoneNumber: '08000000000', // Dummy phone number as AjoLedger doesn't store phone
+          bvn: params.bvn ?? '22222222222', // Dummy BVN for sandbox
           currency: 'NGN',
         },
         { headers: await this.authHeaders() },

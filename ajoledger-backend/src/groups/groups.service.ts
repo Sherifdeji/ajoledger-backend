@@ -228,6 +228,9 @@ export class GroupsService {
         myDetails: {
           position: m.payoutTurn,
           status: myStatus,
+          virtualAccountNumber: m.virtualAccountNumber,
+          virtualBankName: m.virtualBankName,
+          virtualAccountName: m.virtualAccountName,
         },
       };
     });
@@ -273,6 +276,11 @@ export class GroupsService {
       inviteCode: group.inviteCode,
       nombaAccountId: group.nombaAccountId,
       activeCycle: group.cycles[0] ?? null,
+      myDetails: {
+        virtualAccountNumber: membership.virtualAccountNumber,
+        virtualBankName: membership.virtualBankName,
+        virtualAccountName: membership.virtualAccountName,
+      },
       members: group.memberships.map((m) => ({
         membershipId: m.id,
         email: m.user.email,
