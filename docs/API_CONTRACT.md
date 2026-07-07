@@ -1,183 +1,187 @@
-# API Contract: AjoLedger Mobile ↔ Backend
+# AjoLedger API Contract
 
-## Standard Response Envelope
+Base URL: `http://localhost:3000/api/v1` (or your deployed URL)
 
-All API responses must follow this structure:
+> **Note:** All endpoints except `/auth/register` and `/auth/login` require the `Authorization` header:
+> `Authorization: Bearer <your_jwt_token>`
 
+---
+
+## 1. Authentication (Auth)
+
+### Register User
+**`POST /api/v1/auth/register`**
 ```json
 {
-  "success": true,
-  "message": "Operation completed successfully.",
-  "data": {}
+  "email": "user@example.com",
+  "password": "securePassword123!",
+  "firstName": "John",
+  "lastName": "Doe",
+  "pin": "1234" 
 }
+// Note: "pin" is the 4-digit Transaction PIN used for disbursing payouts later.
 ```
 
-For failed requests:
-
+### Login
+**`POST /api/v1/auth/login`**
 ```json
 {
-  "success": false,
-  "message": "Error message describing what went wrong.",
-  "data": null
+  "email": "user@example.com",
+  "password": "securePassword123!"
+}
+// Returns: { "data": { "accessToken": "eyJhbG..." } }
+```
+
+### Verify Transaction PIN
+**`POST /api/v1/auth/verify-transaction-pin`**
+Use this to confirm the user remembers their PIN before taking them to the payout trigger screen.
+```json
+{
+  "pin": "1234"
 }
 ```
 
 ---
 
-# 1. Authentication
+## 2. User Profile & Bank Settings
 
-## POST /auth/login
-
-Authenticates a user using their phone number and Login PIN.
-
-### Request
-
+### Get My Profile
+**`GET /api/v1/users/me`**
+Returns the user's profile. **Mobile Hint:** If `payoutBankCode` is `null`, force the user to set up their bank account before they can join/create groups.
 ```json
+// Response:
 {
-  "phone": "08012345678",
-  "loginPin": "1234"
+  "data": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "payoutBankCode": null,
+    "payoutAccountNumber": null,
+    "payoutAccountName": null
+  }
 }
 ```
 
-### Response
+### Get Supported Banks
+**`GET /api/v1/users/banks`**
+Returns a list of supported Nigerian banks for the dropdown menu.
+```json
+// Response:
+{
+  "data": [
+    { "bankCode": "044", "bankName": "Access Bank" },
+    { "bankCode": "058", "bankName": "Guaranty Trust Bank" }
+  ]
+}
+```
 
+### Resolve Account Number
+**`POST /api/v1/users/resolve-account`**
+Use this to auto-fill the user's name when they type in their account number.
 ```json
 {
-  "success": true,
-  "message": "Login successful.",
-  "data": {
-    "accessToken": "jwt_token",
-    "user": {
-      "id": "user_uuid",
-      "phone": "08012345678"
+  "bankCode": "058",
+  "accountNumber": "0123456789"
+}
+// Returns: { "data": { "accountName": "JOHN DOE" } }
+```
+
+### Update Payout Bank Settings
+**`PATCH /api/v1/users/payout-settings`**
+Save the user's verified bank details where they will receive their Ajo payouts.
+```json
+{
+  "payoutBankCode": "058",
+  "payoutAccountNumber": "0123456789",
+  "payoutAccountName": "JOHN DOE"
+}
+```
+
+---
+
+## 3. Savings Groups
+
+### Create a Group
+**`POST /api/v1/groups`**
+Note: `contributionAmount` is sent in raw Naira (e.g. 50000 = ₦50,000). The backend handles Kobo conversion safely.
+```json
+{
+  "name": "Lagos Traders Ajo",
+  "description": "Weekly contribution for our cohort.",
+  "frequency": "WEEKLY", // "DAILY", "WEEKLY", "MONTHLY"
+  "contributionAmount": 50000,
+  "numberOfParticipants": 10
+}
+// Returns: { "data": { "id": "uuid", "inviteCode": "AJO-7B9A2F" } }
+```
+
+### Join a Group
+**`POST /api/v1/groups/join`**
+```json
+{
+  "inviteCode": "AJO-7B9A2F"
+}
+// Returns: { "data": { "groupId": "...", "membershipId": "..." } }
+```
+
+### Get My Groups
+**`GET /api/v1/groups`**
+Fetches the list of all groups the user belongs to, calculating the live pot status and their unique NUBAN.
+```json
+// Response:
+{
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Lagos Traders Ajo",
+      "inviteCode": "AJO-7B9A2F",
+      "cycleDetails": {
+        "currentCycle": 1,
+        "contributionAmount": 5000000, // In Kobo (₦50,000)
+        "potCollected": 20000000, // What has been paid so far
+        "potTarget": 50000000
+      },
+      "myDetails": {
+        "position": 2, // Payout turn
+        "status": "PENDING", // PENDING or PAID
+        "virtualAccountNumber": "9876543210",
+        "virtualBankName": "Wema Bank",
+        "virtualAccountName": "AjoLedger - JOHN DOE"
+      }
     }
-  }
+  ]
+}
+```
+
+### Assign Payout Order
+**`PATCH /api/v1/groups/:id/payout-order`**
+Only the Coordinator can use this. Drag-and-drop on mobile, then send the final array here.
+```json
+{
+  "assignments": [
+    { "membershipId": "uuid-1", "payoutTurn": 1 },
+    { "membershipId": "uuid-2", "payoutTurn": 2 }
+  ]
 }
 ```
 
 ---
 
-## POST /auth/verify-transaction-pin
+## 4. Savings Cycles & Payouts
 
-Verifies the user's Transaction PIN before authorizing a financial operation.
-
-### Request
-
+### Start Savings Cycle
+**`POST /api/v1/groups/:id/cycles`**
+Only the Coordinator can trigger this. The payload is empty. The backend calculates the rules dynamically.
 ```json
-{
-  "transactionPin": "5678"
-}
+{}
+// Returns: { "data": { "id": "cycle-uuid", "currentRound": 1, ... } }
 ```
 
-### Response
-
+### Disburse Payout (End of Round)
+**`POST /api/v1/groups/:id/cycles/:cycleId/disburse`**
+Only the Coordinator can trigger this. Sends the pot to the winner's configured bank account and progresses the cycle to the next round.
 ```json
 {
-  "success": true,
-  "message": "Transaction PIN verified.",
-  "data": {
-    "status": "verified"
-  }
+  "transactionPin": "1234"
 }
+// Returns: { "data": { "nombaStatus": "SUCCESS" } }
 ```
-
----
-
-# 2. Savings Groups
-
-## POST /groups
-
-Creates a new savings group and provisions its corresponding Nomba Subaccount.
-
-### Request
-
-```json
-{
-  "name": "Backend Engineers Ajo",
-  "description": "Monthly savings contribution group."
-}
-```
-
-### Response
-
-```json
-{
-  "success": true,
-  "message": "Savings group created successfully.",
-  "data": {
-    "id": "group_uuid",
-    "inviteCode": "AJO-7F4X9P"
-  }
-}
-```
-
----
-
-## POST /groups/:id/join
-
-Allows a contributor to join a savings group using an invite code.
-
-### Request
-
-```json
-{
-  "inviteCode": "AJO-7F4X9P"
-}
-```
-
-### Response
-
-```json
-{
-  "success": true,
-  "message": "Successfully joined the group.",
-  "data": {
-    "membershipId": "membership_uuid",
-    "groupId": "group_uuid"
-  }
-}
-```
-
----
-
-# 3. Financials
-
-## POST /payments/contribute
-
-Initiates a contribution towards the active savings cycle.
-
-### Request
-
-```json
-{
-  "contributionId": "contribution_uuid",
-  "amount": 500000,
-  "transactionPin": "5678"
-}
-```
-
-> **Note:** `amount` is represented in **kobo** (₦5,000 = `500000`).
-
-### Response
-
-```json
-{
-  "success": true,
-  "message": "Contribution received successfully.",
-  "data": {
-    "paymentId": "payment_uuid",
-    "status": "SUCCESS"
-  }
-}
-```
-
----
-
-## API Design Principles
-
-- All monetary values are represented as **integer kobo**.
-- Every endpoint returns the standard response envelope.
-- Authentication is handled using JWT Bearer Tokens.
-- Financial operations require Transaction PIN verification.
-- Business state changes originate only from verified webhooks or authorized payout operations.
-- API versioning follows the `/api/v1` convention.
