@@ -68,6 +68,7 @@ export class NombaService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly parentAccountId: string;
+  private readonly teamSubAccountId: string;
 
   /** In-memory token cache — sufficient for a single-instance hackathon server. */
   private tokenCache: NombaTokenCache | null = null;
@@ -88,9 +89,8 @@ export class NombaService {
     this.clientSecret = this.configService.getOrThrow<string>(
       'NOMBA_CLIENT_SECRET',
     );
-    this.parentAccountId = this.configService.getOrThrow<string>(
-      'NOMBA_PARENT_ACCOUNT_ID',
-    );
+    this.parentAccountId = this.configService.getOrThrow<string>('NOMBA_PARENT_ACCOUNT_ID');
+    this.teamSubAccountId = this.configService.getOrThrow<string>('NOMBA_SUB_ACCOUNT_ID');
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -202,44 +202,7 @@ export class NombaService {
     return this.tokenCache.accessToken;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // Virtual Account Provisioning
-  // ─────────────────────────────────────────────────────────────
 
-  /**
-   * Creates a Nomba virtual account (static) to serve as a group's savings vault.
-   * The account is static (no expiry) because groups receive contributions
-   * across multiple rounds over time.
-   *
-   * @param accountRef  Unique, stable reference — we use the groupId.
-   * @param accountName Human-readable name shown on the virtual account.
-   */
-  async createVirtualAccount(
-    accountRef: string,
-    accountName: string,
-  ): Promise<NombaVirtualAccount> {
-    const response = await firstValueFrom(
-      this.httpService.post(
-        `${this.baseUrl}/v1/accounts/virtual`,
-        {
-          accountRef,
-          accountName,
-          currency: 'NGN',
-        },
-        { headers: await this.authHeaders() },
-      ),
-    );
-
-    this.assertNombaSuccess(response.data, 'accounts/virtual');
-
-    const d = response.data.data;
-    return {
-      nombaAccountId: d.accountId,
-      bankAccountNumber: d.bankAccountNumber,
-      bankAccountName: d.bankAccountName,
-      bankName: d.bankName,
-    };
-  }
 
   /**
    * Creates a static virtual account for one membership inside a group vault.
@@ -248,14 +211,13 @@ export class NombaService {
    */
   async createStaticVirtualAccount(params: {
     membershipId: string;
-    groupSubaccountId: string;
     customerEmail: string;
     customerName: string;
     bvn?: string;
   }): Promise<NombaStaticVirtualAccount> {
     const response = await firstValueFrom(
       this.httpService.post<NombaApiResponse<NombaVirtualAccountResponseData>>(
-        `${this.baseUrl}/v1/accounts/virtual/${params.groupSubaccountId}`,
+        `${this.baseUrl}/v1/accounts/virtual/${this.teamSubAccountId}`,
         {
           accountRef: params.membershipId,
           accountName: params.customerName,
@@ -445,7 +407,7 @@ export class NombaService {
   }): Promise<NombaBankTransferResult> {
     const response = await firstValueFrom(
       this.httpService.post(
-        `${this.baseUrl}/v2/transfers/bank`,
+        `${this.baseUrl}/v2/transfers/bank/${this.teamSubAccountId}`,
         {
           amount: this.koboToNombaAmount(params.amount),
           currency: 'NGN',

@@ -36,21 +36,9 @@ export class GroupsService {
     const groupId = crypto.randomUUID();
     const coordinatorMembershipId = crypto.randomUUID();
 
-    // Step 2: Provision a Nomba virtual account BEFORE persisting the group.
-    // A group without a vault is financially invalid — fail fast if Nomba is down.
-    const virtualAccount = await this.nombaService.createVirtualAccount(
-      groupId,
-      dto.name,
-    );
-
-    this.logger.log(
-      `Nomba virtual account provisioned for "${dto.name}": ${virtualAccount.nombaAccountId}`,
-    );
-
     const coordinatorVirtualAccount =
       await this.nombaService.createStaticVirtualAccount({
         membershipId: coordinatorMembershipId,
-        groupSubaccountId: virtualAccount.nombaAccountId,
         customerEmail: owner.email,
         customerName: this.buildVirtualAccountName(dto.name, owner.email),
       });
@@ -68,7 +56,6 @@ export class GroupsService {
           defaultContributionAmountKobo: Math.round(dto.contributionAmount * 100),
           maxParticipants: dto.numberOfParticipants,
           inviteCode,
-          nombaAccountId: virtualAccount.nombaAccountId,
           ownerId: userId,
         },
       });
@@ -124,12 +111,6 @@ export class GroupsService {
 
     const groupId = group.id;
 
-    if (!group.nombaAccountId) {
-      throw new ConflictException(
-        'This group is missing its Nomba vault and cannot accept new members.',
-      );
-    }
-
     const activeCycle = await this.prisma.savingsCycle.findFirst({
       where: { groupId, isActive: true },
       select: { id: true },
@@ -155,7 +136,6 @@ export class GroupsService {
     const membershipVirtualAccount =
       await this.nombaService.createStaticVirtualAccount({
         membershipId,
-        groupSubaccountId: group.nombaAccountId,
         customerEmail: user.email,
         customerName: this.buildVirtualAccountName(group.name, user.email),
       });
@@ -286,7 +266,6 @@ export class GroupsService {
       name: group.name,
       description: group.description,
       inviteCode: group.inviteCode,
-      nombaAccountId: group.nombaAccountId,
       activeCycle: group.cycles[0] ?? null,
       myDetails: {
         virtualAccountNumber: membership.virtualAccountNumber,
