@@ -551,7 +551,7 @@ export class NombaService {
   ): void {
     if (body.code !== '00') {
       this.logger.error(
-        `Nomba API error [${context}]: code=${body.code} description=${body.description}`,
+        `Nomba API error [${context}]: code=${body.code} description=${body.description} payload=${JSON.stringify(body)}`,
       );
       throw new InternalServerErrorException(
         `Payment provider error during ${context}. Please try again.`,
