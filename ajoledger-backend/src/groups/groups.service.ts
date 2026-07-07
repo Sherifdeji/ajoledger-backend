@@ -105,12 +105,21 @@ export class GroupsService {
     // Step 1: Verify the group exists by invite code.
     const group = await this.prisma.savingsGroup.findUnique({
       where: { inviteCode },
+      include: {
+        _count: {
+          select: { memberships: true },
+        },
+      },
     });
 
     if (!group) {
       throw new NotFoundException(
         'Invalid invite code. Please check and try again.',
       );
+    }
+
+    if (group._count.memberships >= group.maxParticipants) {
+      throw new ConflictException('This group is already full.');
     }
 
     const groupId = group.id;
