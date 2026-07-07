@@ -56,7 +56,7 @@ export class CyclesService {
         async (tx) => {
           const group = await tx.savingsGroup.findUnique({
             where: { id: groupId },
-            select: { id: true, frequency: true, defaultContributionAmountKobo: true },
+            select: { id: true, frequency: true, defaultContributionAmountKobo: true, maxParticipants: true },
           });
 
           if (!group) {
@@ -110,6 +110,12 @@ export class CyclesService {
             );
           }
 
+          if (memberships.length !== group.maxParticipants) {
+            throw new ConflictException(
+              'Cannot start cycle: Group must be full before starting the Ajo.',
+            );
+          }
+
           const hasUnassignedTurn = memberships.some((m) => m.payoutTurn === null);
           if (hasUnassignedTurn) {
             throw new ConflictException(
@@ -129,7 +135,7 @@ export class CyclesService {
             data: {
               groupId,
               contributionAmountKobo: group.defaultContributionAmountKobo,
-              totalRounds: memberships.length,
+              totalRounds: group.maxParticipants,
               currentRound: 1,
               isActive: true,
             },
