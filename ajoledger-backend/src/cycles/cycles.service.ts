@@ -15,7 +15,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NombaService } from '../nomba/nomba.service';
-import { CreateCycleDto } from './dto/create-cycle.dto';
+
 
 export interface CreateCycleResult {
   id: string;
@@ -50,24 +50,26 @@ export class CyclesService {
   async createCycle(
     userId: string,
     groupId: string,
-    dto: CreateCycleDto,
   ): Promise<CreateCycleResult> {
-    const dueDate = new Date(dto.dueDate);
-
-    if (dueDate.getTime() <= Date.now()) {
-      throw new BadRequestException('dueDate must be in the future.');
-    }
-
     try {
       return await this.prisma.$transaction(
         async (tx) => {
           const group = await tx.savingsGroup.findUnique({
             where: { id: groupId },
-            select: { id: true },
+            select: { id: true, frequency: true, defaultContributionAmountKobo: true },
           });
 
           if (!group) {
             throw new NotFoundException('Savings group not found.');
+          }
+
+          const dueDate = new Date();
+          if (group.frequency === 'DAILY') {
+            dueDate.setDate(dueDate.getDate() + 1);
+          } else if (group.frequency === 'WEEKLY') {
+            dueDate.setDate(dueDate.getDate() + 7);
+          } else if (group.frequency === 'MONTHLY') {
+            dueDate.setDate(dueDate.getDate() + 30); // Or setMonth
           }
 
           const coordinatorMembership = await tx.membership.findFirst({
@@ -126,7 +128,7 @@ export class CyclesService {
           const cycle = await tx.savingsCycle.create({
             data: {
               groupId,
-              contributionAmountKobo: dto.contributionAmountKobo,
+              contributionAmountKobo: group.defaultContributionAmountKobo,
               totalRounds: memberships.length,
               currentRound: 1,
               isActive: true,

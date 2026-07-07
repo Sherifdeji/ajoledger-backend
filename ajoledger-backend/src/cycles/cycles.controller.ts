@@ -12,7 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
-import { CreateCycleDto } from './dto/create-cycle.dto';
+
 import { DisburseCycleDto } from './dto/disburse-cycle.dto';
 import {
   CreateCycleResult,
@@ -40,9 +40,8 @@ export class CyclesController {
   async createCycle(
     @Request() req: RequestWithUser,
     @Param('id') groupId: string,
-    @Body() dto: CreateCycleDto,
   ): Promise<{ message: string; data: CreateCycleResult }> {
-    const data = await this.cyclesService.createCycle(req.user.id, groupId, dto);
+    const data = await this.cyclesService.createCycle(req.user.id, groupId);
     return { message: 'Savings cycle started successfully.', data };
   }
 
