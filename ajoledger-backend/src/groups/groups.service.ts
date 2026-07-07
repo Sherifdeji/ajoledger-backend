@@ -403,6 +403,9 @@ export class GroupsService {
 
   private buildVirtualAccountName(groupName: string, email: string): string {
     const emailName = email.split('@')[0] || 'member';
-    return `${groupName} ${emailName}`.slice(0, 100);
+    const rawName = `${groupName} ${emailName}`;
+    // Nomba strictly rejects any special characters in the account name
+    const sanitizedName = rawName.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    return sanitizedName.slice(0, 100) || 'AjoLedger Member';
   }
 }
