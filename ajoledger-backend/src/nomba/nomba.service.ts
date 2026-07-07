@@ -215,17 +215,19 @@ export class NombaService {
     customerName: string;
     bvn?: string;
   }): Promise<NombaStaticVirtualAccount> {
+    const payload = {
+      accountRef: params.membershipId,
+      accountName: params.customerName,
+      email: params.customerEmail,
+      phoneNumber: '08000000000', // Dummy phone number as AjoLedger doesn't store phone
+      bvn: params.bvn ?? '22222222222', // Dummy BVN for sandbox
+      currency: 'NGN',
+    };
+    this.logger.log(`Outgoing Nomba VA Payload: ${JSON.stringify(payload)}`);
     const response = await firstValueFrom(
       this.httpService.post<NombaApiResponse<NombaVirtualAccountResponseData>>(
         `${this.baseUrl}/v1/accounts/virtual/${this.teamSubAccountId}`,
-        {
-          accountRef: params.membershipId,
-          accountName: params.customerName,
-          email: params.customerEmail,
-          phoneNumber: '08000000000', // Dummy phone number as AjoLedger doesn't store phone
-          bvn: params.bvn ?? '22222222222', // Dummy BVN for sandbox
-          currency: 'NGN',
-        },
+        payload,
         { headers: await this.authHeaders() },
       ),
     );
