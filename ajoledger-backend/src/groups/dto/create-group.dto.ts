@@ -34,11 +34,11 @@ export class CreateGroupDto {
 
   @ApiProperty({
     example: 50000,
-    description: 'The required contribution amount per member in Naira (minimum ₦500)',
-    minimum: 500,
+    description: 'The required contribution amount per member in Naira (minimum ₦100)',
+    minimum: 100,
   })
   @IsNumber()
-  @Min(500, { message: 'Minimum contribution amount is ₦500.' })
+  @Min(100, { message: 'Minimum contribution amount is ₦100.' })
   contributionAmount: number;
 
   @ApiProperty({
