@@ -195,6 +195,10 @@ export class WebhooksService {
           data: { status: ContributionStatus.PAID },
         });
 
+        this.logger.log(
+          `✅ Payment of ${paidAmountKobo} Kobo successfully processed for membership ${membership.id} in cycle ${activeCycle.id}`,
+        );
+
         return {
           status: 'processed',
           paymentId: payment.id,
