@@ -35,8 +35,8 @@ export interface DisbursePayoutResult {
   round: number;
 }
 
-/** ₦20 flat Nomba network fee in kobo — disclosed in AjoLedger T&Cs. */
-const NOMBA_NETWORK_FEE_KOBO = 2000;
+/** ₦40 total (₦20 for Nomba Virtual Account Inflow processing + ₦20 for Outbound Transfer) */
+const NOMBA_NETWORK_FEE_KOBO = 4000;
 
 @Injectable()
 export class CyclesService {
