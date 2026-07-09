@@ -415,9 +415,9 @@ export class NombaService {
           {
             amount: this.koboToNombaAmount(params.amount),
             currency: 'NGN',
-            destinationBankCode: params.destinationBankCode,
-            destinationAccountNumber: params.destinationAccountNumber,
-            destinationAccountName: params.destinationAccountName,
+            bankCode: params.destinationBankCode,
+            accountNumber: params.destinationAccountNumber,
+            accountName: params.destinationAccountName,
             merchantTxRef: params.merchantTxRef,
             narration: params.narration,
           },
