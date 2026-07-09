@@ -407,26 +407,42 @@ export class NombaService {
     destinationAccountName: string;
     narration: string;
   }): Promise<NombaBankTransferResult> {
-    const response = await firstValueFrom(
-      this.httpService.post(
-        `${this.baseUrl}/v2/transfers/bank/${this.teamSubAccountId}`,
-        {
-          amount: this.koboToNombaAmount(params.amount),
-          currency: 'NGN',
-          destinationBankCode: params.destinationBankCode,
-          destinationAccountNumber: params.destinationAccountNumber,
-          destinationAccountName: params.destinationAccountName,
-          merchantTxRef: params.merchantTxRef,
-          narration: params.narration,
-        },
-        {
-          headers: {
-            ...(await this.authHeaders()),
-            'X-Idempotent-key': params.merchantTxRef,
+    let response;
+    try {
+      response = await firstValueFrom(
+        this.httpService.post(
+          `${this.baseUrl}/v2/transfers/bank/${this.teamSubAccountId}`,
+          {
+            amount: this.koboToNombaAmount(params.amount),
+            currency: 'NGN',
+            destinationBankCode: params.destinationBankCode,
+            destinationAccountNumber: params.destinationAccountNumber,
+            destinationAccountName: params.destinationAccountName,
+            merchantTxRef: params.merchantTxRef,
+            narration: params.narration,
           },
-        },
-      ),
-    );
+          {
+            headers: {
+              ...(await this.authHeaders()),
+              'X-Idempotent-key': params.merchantTxRef,
+            },
+          },
+        ),
+      );
+    } catch (error: unknown) {
+      const axiosError = error as {
+        response?: { data?: unknown; status?: number };
+        message?: string;
+      };
+      
+      this.logger.error(
+        `Nomba bank transfer failed with HTTP ${axiosError.response?.status}: ${JSON.stringify(axiosError.response?.data)}`,
+      );
+      
+      throw new BadRequestException(
+        `Transfer failed: ${JSON.stringify(axiosError.response?.data)}`,
+      );
+    }
 
     this.assertNombaSuccess(response.data, 'transfers/bank');
 
