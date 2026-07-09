@@ -62,6 +62,9 @@ enum PaymentStatus {
 model User {
   id                 String   @id @default(uuid())
   email              String   @unique
+  firstName          String?  @map("first_name")
+  lastName           String?  @map("last_name")
+  phoneNumber        String?  @map("phone_number")
   passwordHash       String   @map("password_hash")
   /// Null until the user completes the setup-transaction-pin flow (progressive profiling).
   transactionPinHash String?  @map("transaction_pin_hash")
@@ -72,6 +75,13 @@ model User {
   payoutBankCode      String? @map("payout_bank_code")
   payoutAccountNumber String? @map("payout_account_number")
   payoutAccountName   String? @map("payout_account_name")
+
+  /// Soft deletion fields (14-day retention flow)
+  isDeactivated         Boolean   @default(false) @map("is_deactivated")
+  scheduledDeletionDate DateTime? @map("scheduled_deletion_date")
+  deletionReason        String?   @map("deletion_reason")
+  deletionOtpHash       String?   @map("deletion_otp_hash")
+  deletionOtpExpiresAt  DateTime? @map("deletion_otp_expires_at")
 
   ownedGroups SavingsGroup[]
   memberships Membership[]

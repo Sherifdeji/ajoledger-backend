@@ -4,6 +4,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Patch,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { SetupTransactionPinDto } from './dto/setup-transaction-pin.dto';
 import { VerifyTransactionPinDto } from './dto/verify-transaction-pin.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthenticatedUser } from './strategies/jwt.strategy';
 
@@ -39,6 +41,23 @@ export class AuthController {
   async login(@Body() dto: LoginDto) {
     const data = await this.authService.login(dto.email, dto.password);
     return { message: 'Login successful.', data };
+  }
+
+  @Patch('password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change user password' })
+  async changePassword(
+    @Request() req: RequestWithUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    await this.authService.changePassword(
+      req.user.id,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    return { message: 'Password changed successfully.', data: null };
   }
 
   // ── Transaction PIN endpoints — untouched by the email/password pivot ──

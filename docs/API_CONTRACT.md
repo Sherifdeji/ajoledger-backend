@@ -54,11 +54,61 @@ Returns the user's profile. **Mobile Hint:** If `payoutBankCode` is `null`, forc
   "data": {
     "id": "uuid",
     "email": "user@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "phoneNumber": "08012345678",
     "payoutBankCode": null,
     "payoutAccountNumber": null,
-    "payoutAccountName": null
+    "payoutAccountName": null,
+    "isDeactivated": false
   }
 }
+```
+
+### Update My Profile
+**`PATCH /api/v1/users/me`**
+Update basic profile information.
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "phoneNumber": "08012345678"
+}
+```
+
+### Change Password
+**`PATCH /api/v1/auth/password`**
+```json
+{
+  "currentPassword": "oldPassword123!",
+  "newPassword": "newSecurePassword456!"
+}
+```
+
+### Initiate Account Deletion
+**`POST /api/v1/users/me/delete/initiate`**
+Generates a 6-digit OTP and returns it (for this hackathon) to verify the soft deletion.
+```json
+{
+  "reason": "I want to delete my account."
+}
+// Returns: { "data": { "otp": "123456" } }
+```
+
+### Verify Account Deletion
+**`POST /api/v1/users/me/delete/verify`**
+Verifies the OTP and schedules the account for soft deletion (14-day retention). User's JWT is immediately invalidated for all standard endpoints.
+```json
+{
+  "otp": "123456"
+}
+```
+
+### Reactivate Account
+**`POST /api/v1/users/me/reactivate`**
+Restores full access to a deactivated account. Requires a valid JWT (user must log in first).
+```json
+// No body required
 ```
 
 ### Get Supported Banks

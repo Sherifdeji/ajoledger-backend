@@ -79,7 +79,7 @@ export class AuthService {
     userId: string,
     transactionPin: string,
   ): Promise<{ status: string }> {
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findRawById(userId);
     if (!user) {
       throw new UnauthorizedException('User not found.');
     }
@@ -104,7 +104,7 @@ export class AuthService {
     userId: string,
     transactionPin: string,
   ): Promise<{ status: string }> {
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findRawById(userId);
     if (!user) {
       throw new UnauthorizedException('User not found.');
     }
@@ -138,7 +138,30 @@ export class AuthService {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Internal helpers
+  // Internal helper for issuing tokens
+  // ─────────────────────────────────────────────────────────────
+
+  async changePassword(
+    userId: string,
+    currentPasswordUnhashed: string,
+    newPasswordUnhashed: string,
+  ): Promise<void> {
+    const user = await this.usersService.findRawById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
+    }
+
+    const isMatch = await bcrypt.compare(currentPasswordUnhashed, user.passwordHash);
+    if (!isMatch) {
+      throw new BadRequestException('Current password is incorrect.');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const newPasswordHash = await bcrypt.hash(newPasswordUnhashed, salt);
+
+    await this.usersService.updatePassword(userId, newPasswordHash);
+  }
+
   // ─────────────────────────────────────────────────────────────
 
   private signToken(userId: string, email: string): string {

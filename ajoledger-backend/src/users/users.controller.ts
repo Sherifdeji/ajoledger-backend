@@ -19,6 +19,9 @@ import { UsersService } from './users.service';
 import { ResolveAccountDto } from './dto/resolve-account.dto';
 import { SetupBankDto } from './dto/setup-bank.dto';
 import { UpdatePayoutSettingsDto } from './dto/update-payout-settings.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { InitiateDeletionDto } from './dto/initiate-deletion.dto';
+import { VerifyDeletionDto } from './dto/verify-deletion.dto';
 
 interface RequestWithUser extends Request {
   user: AuthenticatedUser;
@@ -39,41 +42,60 @@ export class UsersController {
   // Profile
   // ─────────────────────────────────────────────────────────────
 
-  /**
-   * GET /api/v1/users/me
-   *
-   * Returns the authenticated user's profile.
-   * The mobile app uses `payoutBankCode !== null` to determine whether
-   * the bank details setup modal should be shown on app load.
-   *
-   * Response (200):
-   * {
-   *   "success": true,
-   *   "message": "Profile retrieved successfully.",
-   *   "data": {
-   *     "id": "...",
-   *     "email": "...",
-   *     "payoutBankCode": null,          ← null = not configured → show modal
-   *     "payoutAccountNumber": null,
-   *     "payoutAccountName": null,
-   *     "createdAt": "..."
-   *   }
-   * }
-   */
   @Get('me')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Get current user profile — check payoutBankCode to decide if bank setup modal is needed',
-  })
-  async getMe(@Request() req: RequestWithUser) {
-    const data = await this.usersService.getProfile(req.user.id);
-
+  @ApiOperation({ summary: 'Get the authenticated user profile' })
+  async getProfile(@Request() req: RequestWithUser) {
+    const data = await this.usersService.findById(req.user.id);
     if (!data) {
-      throw new NotFoundException('User not found.');
+      throw new NotFoundException('User profile not found.');
     }
-
     return { message: 'Profile retrieved successfully.', data };
+  }
+
+  @Patch('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update the authenticated user profile details' })
+  async updateProfile(
+    @Request() req: RequestWithUser,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    const data = await this.usersService.updateProfile(req.user.id, dto);
+    return { message: 'Profile updated successfully.', data };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Soft Deletion
+  // ─────────────────────────────────────────────────────────────
+
+  @Post('me/delete/initiate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Initiate account soft deletion (generates OTP)' })
+  async initiateDeletion(
+    @Request() req: RequestWithUser,
+    @Body() dto: InitiateDeletionDto,
+  ) {
+    const data = await this.usersService.initiateSoftDeletion(req.user.id, dto.reason);
+    return { message: 'Deletion initiated. Please verify with the OTP sent to your email.', data };
+  }
+
+  @Post('me/delete/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP to schedule account deletion' })
+  async verifyDeletion(
+    @Request() req: RequestWithUser,
+    @Body() dto: VerifyDeletionDto,
+  ) {
+    await this.usersService.verifySoftDeletion(req.user.id, dto.otp);
+    return { message: 'Account has been scheduled for deletion.', data: null };
+  }
+
+  @Post('me/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reactivate a deactivated account' })
+  async reactivateAccount(@Request() req: RequestWithUser) {
+    await this.usersService.reactivateAccount(req.user.id);
+    return { message: 'Account reactivated successfully.', data: null };
   }
 
   // ─────────────────────────────────────────────────────────────
