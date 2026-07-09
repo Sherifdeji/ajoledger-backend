@@ -567,7 +567,7 @@ export class NombaService {
     body: { code: string; description?: string },
     context: string,
   ): void {
-    if (body.code !== '00') {
+    if (body.code !== '00' && body.code !== '200') {
       this.logger.error(
         `Nomba API error [${context}]: code=${body.code} description=${body.description} payload=${JSON.stringify(body)}`,
       );
