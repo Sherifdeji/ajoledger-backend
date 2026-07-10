@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -13,10 +14,14 @@ const BCRYPT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
+  private readonly oauthClient: OAuth2Client;
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) {
+    this.oauthClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+  }
 
   // ─────────────────────────────────────────────────────────────
   // Registration
@@ -60,8 +65,61 @@ export class AuthService {
       '$2b$12$invalidhashpaddinginvalidhashpaddinginvalidhashpadding00';
     const isMatch = await bcrypt.compare(password, hashToCheck);
 
+    if (user && user.authProvider === 'GOOGLE' && !user.passwordHash) {
+      throw new UnauthorizedException(
+        "This account uses Google Sign-In. Please click 'Continue with Google' to log in, then set a password in your security settings to be able to login with password later.",
+      );
+    }
+
     if (!user || !isMatch) {
       throw new UnauthorizedException('Invalid email address or password.');
+    }
+
+    const accessToken = this.signToken(user.id, user.email);
+    return {
+      accessToken,
+      user: { id: user.id, email: user.email },
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Google OAuth Login
+  // ─────────────────────────────────────────────────────────────
+
+  async googleLogin(idToken: string): Promise<{ accessToken: string; user: { id: string; email: string } }> {
+    let ticket;
+    try {
+      ticket = await this.oauthClient.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+    } catch (error) {
+      throw new UnauthorizedException('Invalid Google ID Token.');
+    }
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      throw new BadRequestException('Google token payload is missing email.');
+    }
+
+    const { email, sub: googleId, given_name: firstName, family_name: lastName, email_verified } = payload;
+
+    let user = await this.usersService.findByEmail(email);
+
+    if (user) {
+      // Scenario B: Local user tries Google login
+      if (user.authProvider === 'LOCAL') {
+        if (!email_verified) {
+          throw new UnauthorizedException('Google email is not verified.');
+        }
+        user = await this.usersService.linkGoogleAccount(user.id, googleId);
+      }
+    } else {
+      // New user via Google
+      if (!email_verified) {
+        throw new UnauthorizedException('Google email is not verified.');
+      }
+      user = await this.usersService.createUserGoogle(email, googleId, firstName, lastName);
     }
 
     const accessToken = this.signToken(user.id, user.email);
@@ -143,7 +201,7 @@ export class AuthService {
 
   async changePassword(
     userId: string,
-    currentPasswordUnhashed: string,
+    currentPasswordUnhashed: string | undefined,
     newPasswordUnhashed: string,
   ): Promise<void> {
     const user = await this.usersService.findRawById(userId);
@@ -151,15 +209,27 @@ export class AuthService {
       throw new UnauthorizedException('User not found.');
     }
 
-    const isMatch = await bcrypt.compare(currentPasswordUnhashed, user.passwordHash);
-    if (!isMatch) {
-      throw new BadRequestException('Current password is incorrect.');
+    // THE CRITICAL GUARD RAIL:
+    if (user.authProvider !== 'GOOGLE' && !currentPasswordUnhashed) {
+      throw new BadRequestException('Current password is required for this account type.');
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const newPasswordHash = await bcrypt.hash(newPasswordUnhashed, salt);
+    // Only proceed to bypass if the user is strictly GOOGLE-only
+    if (user.authProvider === 'GOOGLE' || !user.passwordHash) {
+      const salt = await bcrypt.genSalt(10);
+      const newPasswordHash = await bcrypt.hash(newPasswordUnhashed, salt);
+      await this.usersService.addPassword(userId, newPasswordHash);
+    } else {
+      // Compare dto.currentPassword with user.passwordHash using bcrypt
+      const isMatch = await bcrypt.compare(currentPasswordUnhashed!, user.passwordHash);
+      if (!isMatch) {
+        throw new BadRequestException('Current password is incorrect.');
+      }
 
-    await this.usersService.updatePassword(userId, newPasswordHash);
+      const salt = await bcrypt.genSalt(10);
+      const newPasswordHash = await bcrypt.hash(newPasswordUnhashed, salt);
+      await this.usersService.addPassword(userId, newPasswordHash); // Using addPassword since it upgrades to BOTH if needed
+    }
   }
 
   // ─────────────────────────────────────────────────────────────

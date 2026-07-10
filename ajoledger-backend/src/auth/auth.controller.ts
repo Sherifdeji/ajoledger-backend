@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { SetupTransactionPinDto } from './dto/setup-transaction-pin.dto';
 import { VerifyTransactionPinDto } from './dto/verify-transaction-pin.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -41,6 +42,14 @@ export class AuthController {
   async login(@Body() dto: LoginDto) {
     const data = await this.authService.login(dto.email, dto.password);
     return { message: 'Login successful.', data };
+  }
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login or register using Google ID Token via native mobile SDK' })
+  async googleLogin(@Body() dto: GoogleLoginDto) {
+    const data = await this.authService.googleLogin(dto.idToken);
+    return { message: 'Google login successful.', data };
   }
 
   @Patch('password')

@@ -52,6 +52,43 @@ export class UsersService {
     });
   }
 
+  async createUserGoogle(
+    email: string,
+    googleId: string,
+    firstName?: string,
+    lastName?: string,
+  ) {
+    return this.prisma.user.create({
+      data: {
+        email,
+        googleId,
+        firstName,
+        lastName,
+        authProvider: 'GOOGLE',
+      },
+    });
+  }
+
+  async linkGoogleAccount(userId: string, googleId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleId,
+        authProvider: 'BOTH',
+      },
+    });
+  }
+
+  async addPassword(userId: string, passwordHash: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+        authProvider: 'BOTH',
+      },
+    });
+  }
+
   async setTransactionPin(
     userId: string,
     transactionPinHash: string,

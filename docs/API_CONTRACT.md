@@ -32,6 +32,16 @@ Base URL: `http://localhost:3000/api/v1` (or your deployed URL)
 // Returns: { "data": { "accessToken": "eyJhbG..." } }
 ```
 
+### Google Sign In / Sign Up
+**`POST /api/v1/auth/google`**
+Send the Google `idToken` obtained from the native Google Sign-In SDK. This endpoint handles both sign-up and sign-in seamlessly.
+```json
+{
+  "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI..."
+}
+// Returns: { "data": { "accessToken": "eyJhbG..." } }
+```
+
 ### Verify Transaction PIN
 **`POST /api/v1/auth/verify-transaction-pin`**
 Use this to confirm the user remembers their PIN before taking them to the payout trigger screen.

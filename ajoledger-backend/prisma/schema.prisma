@@ -25,6 +25,12 @@ datasource db {
 // ENUMS
 // =============================================================
 
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  BOTH
+}
+
 enum ContributionFrequency {
   DAILY
   WEEKLY
@@ -65,7 +71,9 @@ model User {
   firstName          String?  @map("first_name")
   lastName           String?  @map("last_name")
   phoneNumber        String?  @map("phone_number")
-  passwordHash       String   @map("password_hash")
+  passwordHash       String?  @map("password_hash")
+  googleId           String?  @unique @map("google_id")
+  authProvider       AuthProvider @default(LOCAL) @map("auth_provider")
   /// Null until the user completes the setup-transaction-pin flow (progressive profiling).
   transactionPinHash String?  @map("transaction_pin_hash")
   createdAt          DateTime @default(now()) @map("created_at")
