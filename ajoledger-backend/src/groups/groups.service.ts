@@ -1,15 +1,18 @@
 import {
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { MemberRole, Prisma } from '@prisma/client';
+import { ContributionFrequency, MemberRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NombaService } from '../nomba/nomba.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { AssignPayoutOrderDto } from './dto/assign-payout-order.dto';
+import { calculateGrossChargeKobo } from '../utils/fee-calculator.util';
 
 @Injectable()
 export class GroupsService {
@@ -267,12 +270,26 @@ export class GroupsService {
       throw new NotFoundException('Group not found.');
     }
 
+    let grossContributionAmount: number | null = null;
+    if (group.cycles[0]) {
+      grossContributionAmount = calculateGrossChargeKobo(
+        group.cycles[0].contributionAmountKobo,
+        group.maxParticipants,
+        500 // Platform fee (default ₦5)
+      );
+    }
+
     return {
       id: group.id,
       name: group.name,
       description: group.description,
       inviteCode: group.inviteCode,
-      activeCycle: group.cycles[0] ?? null,
+      activeCycle: group.cycles[0]
+        ? {
+            ...group.cycles[0],
+            grossContributionAmount,
+          }
+        : null,
       myDetails: {
         virtualAccountNumber: membership.virtualAccountNumber,
         virtualBankName: membership.virtualBankName,

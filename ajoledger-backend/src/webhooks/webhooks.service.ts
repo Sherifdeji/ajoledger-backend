@@ -11,6 +11,7 @@ import {
   NombaWebhookPayload,
   NombaWebhookResult,
 } from './interfaces/nomba-webhook-payload.interface';
+import { calculateGrossChargeKobo } from '../utils/fee-calculator.util';
 
 /** Number of days ahead to set the due date when seeding next-round contributions. */
 const NEXT_ROUND_DUE_DAYS = 30;
@@ -107,6 +108,9 @@ export class WebhooksService {
           select: {
             id: true,
             groupId: true,
+            group: {
+              select: { maxParticipants: true },
+            },
           },
         });
 
@@ -171,13 +175,19 @@ export class WebhooksService {
           };
         }
 
-        if (paidAmountKobo !== activeCycle.contributionAmountKobo) {
+        const expectedGrossKobo = calculateGrossChargeKobo(
+          activeCycle.contributionAmountKobo,
+          membership.group.maxParticipants,
+          500 // Platform fee
+        );
+
+        if (paidAmountKobo !== expectedGrossKobo) {
           this.logger.warn(
-            `Ignoring amount mismatch. transactionId=${transactionId} paid=${paidAmountKobo} expected=${activeCycle.contributionAmountKobo}`,
+            `Ignoring amount mismatch. transactionId=${transactionId} paid=${paidAmountKobo} expectedGross=${expectedGrossKobo}`,
           );
           return {
             status: 'ignored',
-            reason: 'Paid amount does not match expected contribution amount.',
+            reason: 'Paid amount does not match expected gross contribution amount.',
           };
         }
 
