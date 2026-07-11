@@ -47,6 +47,41 @@ export class CyclesService {
     private readonly nombaService: NombaService,
   ) {}
 
+  // ─────────────────────────────────────────────────────────────
+  // Payment Status Polling
+  // ─────────────────────────────────────────────────────────────
+
+  async getCurrentPaymentStatus(userId: string, groupId: string): Promise<{ status: string }> {
+    const activeCycle = await this.prisma.savingsCycle.findFirst({
+      where: { groupId, isActive: true },
+      select: { id: true, currentRound: true },
+    });
+
+    if (!activeCycle) {
+      throw new NotFoundException('No active savings cycle found for this group.');
+    }
+
+    const membership = await this.prisma.membership.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('You are not a member of this group.');
+    }
+
+    const contribution = await this.prisma.contribution.findFirst({
+      where: {
+        cycleId: activeCycle.id,
+        membershipId: membership.id,
+        roundNumber: activeCycle.currentRound,
+      },
+      select: { status: true },
+    });
+
+    return { status: contribution?.status ?? 'PENDING' };
+  }
+
   async createCycle(
     userId: string,
     groupId: string,

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -34,9 +35,27 @@ export class CyclesController {
     private readonly authService: AuthService,
   ) {}
 
+  @Get('current/payment-status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Poll the payment status of the current user for the active cycle',
+  })
+  async getCurrentPaymentStatus(
+    @Request() req: RequestWithUser,
+    @Param('id') groupId: string,
+  ): Promise<{ message: string; data: { status: string } }> {
+    const data = await this.cyclesService.getCurrentPaymentStatus(
+      req.user.id,
+      groupId,
+    );
+    return { message: 'Payment status retrieved successfully.', data };
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Start a new savings cycle for a group (Coordinator only)' })
+  @ApiOperation({
+    summary: 'Start a new savings cycle for a group (Coordinator only)',
+  })
   async createCycle(
     @Request() req: RequestWithUser,
     @Param('id') groupId: string,
@@ -73,5 +92,3 @@ export class CyclesController {
     return { message: 'Payout disbursement initiated successfully.', data };
   }
 }
-
-

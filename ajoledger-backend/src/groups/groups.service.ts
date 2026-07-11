@@ -271,12 +271,25 @@ export class GroupsService {
     }
 
     let grossContributionAmount: number | null = null;
+    let myContributionStatus = 'PENDING';
+
     if (group.cycles[0]) {
       grossContributionAmount = calculateGrossChargeKobo(
         group.cycles[0].contributionAmountKobo,
         group.maxParticipants,
         500 // Platform fee (default ₦5)
       );
+
+      const contribution = await this.prisma.contribution.findFirst({
+        where: {
+          cycleId: group.cycles[0].id,
+          membershipId: membership.id,
+          roundNumber: group.cycles[0].currentRound,
+        },
+        select: { status: true },
+      });
+
+      myContributionStatus = contribution?.status ?? 'PENDING';
     }
 
     return {
@@ -288,6 +301,7 @@ export class GroupsService {
         ? {
             ...group.cycles[0],
             grossContributionAmount,
+            myContributionStatus,
           }
         : null,
       myDetails: {
