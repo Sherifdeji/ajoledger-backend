@@ -219,6 +219,10 @@ export class GroupsService {
         id: m.group.id,
         name: m.group.name,
         inviteCode: m.group.inviteCode,
+        frequency: m.group.frequency,
+        contributionAmount: m.group.defaultContributionAmountKobo,
+        joinedCount: memberCount,
+        numberOfParticipants: m.group.maxParticipants,
         cycleDetails: {
           currentCycle: activeCycle?.currentRound ?? 0,
           contributionAmount: activeCycle?.contributionAmountKobo ?? 0,
@@ -297,6 +301,10 @@ export class GroupsService {
       name: group.name,
       description: group.description,
       inviteCode: group.inviteCode,
+      frequency: group.frequency,
+      contributionAmount: group.defaultContributionAmountKobo,
+      joinedCount: group.memberships.length,
+      numberOfParticipants: group.maxParticipants,
       activeCycle: group.cycles[0]
         ? {
             ...group.cycles[0],

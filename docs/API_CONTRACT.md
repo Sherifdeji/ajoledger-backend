@@ -183,32 +183,65 @@ Note: `contributionAmount` is sent in raw Naira (e.g. 50000 = ₦50,000). The ba
 // Returns: { "data": { "groupId": "...", "membershipId": "..." } }
 ```
 
-### Get My Groups
+### Get User's Groups
 **`GET /api/v1/groups`**
-Fetches the list of all groups the user belongs to, calculating the live pot status and their unique NUBAN.
+Fetches all savings groups the user belongs to, including limited details about the active cycle and their payment status.
 ```json
 // Response:
 {
   "data": [
     {
       "id": "uuid",
-      "name": "Lagos Traders Ajo",
-      "inviteCode": "AJO-7B9A2F",
+      "name": "Backend Engineers Ajo",
+      "inviteCode": "XYZ123",
+      "frequency": "WEEKLY",
+      "contributionAmount": 5000000,
+      "joinedCount": 5,
+      "numberOfParticipants": 10,
       "cycleDetails": {
         "currentCycle": 1,
-        "contributionAmount": 5000000, // In Kobo (₦50,000)
-        "potCollected": 20000000, // What has been paid so far
-        "potTarget": 50000000
+        "contributionAmount": 5000000,
+        "potCollected": 10000000,
+        "potTarget": 50000000,
+        "nextPayoutDate": "2024-04-10T12:00:00Z"
       },
       "myDetails": {
-        "position": 2, // Payout turn
-        "status": "PENDING", // PENDING or PAID
-        "virtualAccountNumber": "9876543210",
-        "virtualBankName": "Wema Bank",
-        "virtualAccountName": "AjoLedger - JOHN DOE"
+        "position": 2,
+        "status": "PENDING"
       }
     }
   ]
+}
+```
+
+### Get Group Details
+**`GET /api/v1/groups/:id`**
+Fetches full group details, the active cycle, and the user's dedicated Nomba virtual account for transferring their contribution.
+```json
+// Response:
+{
+  "data": {
+    "id": "uuid",
+    "name": "Backend Engineers Ajo",
+    "inviteCode": "XYZ123",
+    "frequency": "WEEKLY",
+    "contributionAmount": 5000000,
+    "joinedCount": 5,
+    "numberOfParticipants": 10,
+    "activeCycle": {
+      "id": "uuid",
+      "contributionAmountKobo": 5000000,
+      "grossContributionAmount": 5025000,
+      "currentRound": 1,
+      "myContributionStatus": "PENDING"
+    },
+    "myDetails": {
+      "virtualAccountNumber": "9933221100",
+      "virtualBankName": "Nomba",
+      "virtualAccountName": "AjoLedger - Backend Engineers Ajo"
+    },
+    "members": [ ... ]
+  }
 }
 ```
 
