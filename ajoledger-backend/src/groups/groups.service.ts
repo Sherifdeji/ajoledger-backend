@@ -212,6 +212,7 @@ export class GroupsService {
       
       let potCollected = 0;
       let myStatus = 'PENDING';
+      let myContributionDueDate: Date | null = null;
       
       if (activeCycle) {
         potCollected = activeCycle.contributions.reduce(
@@ -222,6 +223,7 @@ export class GroupsService {
         const myContribution = m.contributions.find(c => c.roundNumber === activeCycle.currentRound);
         if (myContribution) {
           myStatus = myContribution.status;
+          myContributionDueDate = myContribution.dueDate;
         }
       }
 
@@ -245,7 +247,8 @@ export class GroupsService {
           contributionAmount: activeCycle?.contributionAmountKobo ?? 0,
           potCollected,
           potTarget: activeCycle ? activeCycle.contributionAmountKobo * memberCount : 0,
-          nextPayoutDate: activeCycle?.startedAt ?? null, // Simplification for hackathon
+          nextPayoutDate: myContributionDueDate ?? activeCycle?.startedAt ?? null,
+          startedAt: activeCycle?.startedAt ?? null,
         },
         myDetails: {
           position: m.payoutTurn,
@@ -296,6 +299,7 @@ export class GroupsService {
 
     let grossContributionAmount: number | null = null;
     let myContributionStatus = 'PENDING';
+    let myContributionDueDate: Date | null = null;
 
     if (group.cycles[0]) {
       grossContributionAmount = calculateGrossChargeKobo(
@@ -310,10 +314,11 @@ export class GroupsService {
           membershipId: membership.id,
           roundNumber: group.cycles[0].currentRound,
         },
-        select: { status: true },
+        select: { status: true, dueDate: true },
       });
 
       myContributionStatus = contribution?.status ?? 'PENDING';
+      myContributionDueDate = contribution?.dueDate ?? null;
     }
 
     const expectedGrossContributionAmount = calculateGrossChargeKobo(
@@ -354,6 +359,7 @@ export class GroupsService {
             ...group.cycles[0],
             grossContributionAmount,
             myContributionStatus,
+            nextPayoutDate: myContributionDueDate ?? group.cycles[0].startedAt,
           }
         : null,
       myDetails: {
