@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -18,4 +18,3 @@ export class RegisterDto {
   @MinLength(8, { message: 'password must be at least 8 characters' })
   password: string;
 }
-

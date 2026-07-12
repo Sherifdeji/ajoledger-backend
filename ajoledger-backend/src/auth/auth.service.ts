@@ -40,7 +40,16 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    const user = await this.usersService.createUser(sanitizedEmail, passwordHash);
+    
+    // Fallback: Generate a default first name from the email address
+    const defaultFirstName = sanitizedEmail.split('@')[0];
+    
+    const user = await this.usersService.createUser(
+      sanitizedEmail,
+      passwordHash,
+      defaultFirstName,
+      null,
+    );
     const accessToken = this.signToken(user.id, user.email);
 
     return {

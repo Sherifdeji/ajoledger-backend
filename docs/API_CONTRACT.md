@@ -15,8 +15,6 @@ Base URL: `http://localhost:3000/api/v1` (or your deployed URL)
 {
   "email": "user@example.com",
   "password": "securePassword123!",
-  "firstName": "John",
-  "lastName": "Doe",
   "pin": "1234" 
 }
 // Note: "pin" is the 4-digit Transaction PIN used for disbursing payouts later.

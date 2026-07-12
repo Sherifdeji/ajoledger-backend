@@ -46,9 +46,9 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  async createUser(email: string, passwordHash: string) {
+  async createUser(email: string, passwordHash: string, firstName: string, lastName: string | null) {
     return this.prisma.user.create({
-      data: { email, passwordHash },
+      data: { email, passwordHash, firstName, lastName },
     });
   }
 
