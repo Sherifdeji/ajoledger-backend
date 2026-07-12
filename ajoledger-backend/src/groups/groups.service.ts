@@ -266,7 +266,10 @@ export class GroupsService {
       include: {
         memberships: {
           include: {
-            user: { select: { email: true } }
+            user: { select: { email: true } },
+            contributions: {
+              where: { cycle: { isActive: true } }
+            }
           },
           orderBy: { payoutTurn: 'asc' }
         },
@@ -331,15 +334,29 @@ export class GroupsService {
         virtualBankName: membership.virtualBankName,
         virtualAccountName: membership.virtualAccountName,
       },
-      members: group.memberships.map((m) => ({
-        membershipId: m.id,
-        email: m.user.email,
-        role: m.role,
-        payoutTurn: m.payoutTurn,
-        virtualAccountNumber: m.virtualAccountNumber, // <--- Exposed here
-        virtualBankName: m.virtualBankName,           // <--- Exposed here
-        virtualAccountName: m.virtualAccountName,     // <--- Exposed here
-      })),
+      members: group.memberships.map((m) => {
+        let memberStatus = 'PENDING';
+        if (group.cycles[0]) {
+          const currentRound = group.cycles[0].currentRound;
+          const currentContribution = m.contributions.find(
+            (c) => c.roundNumber === currentRound
+          );
+          if (currentContribution) {
+            memberStatus = currentContribution.status;
+          }
+        }
+
+        return {
+          membershipId: m.id,
+          email: m.user.email,
+          role: m.role,
+          payoutTurn: m.payoutTurn,
+          virtualAccountNumber: m.virtualAccountNumber,
+          virtualBankName: m.virtualBankName,
+          virtualAccountName: m.virtualAccountName,
+          contributionStatus: memberStatus, // <--- Exposed here
+        };
+      }),
     };
   }
 

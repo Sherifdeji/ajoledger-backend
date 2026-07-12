@@ -250,7 +250,8 @@ Fetches full group details, the active cycle, and the user's dedicated Nomba vir
         "payoutTurn": 1,
         "virtualAccountNumber": "9933221100",
         "virtualBankName": "Nomba",
-        "virtualAccountName": "AjoLedger - Backend Engineers Ajo"
+        "virtualAccountName": "AjoLedger - Backend Engineers Ajo",
+        "contributionStatus": "PENDING"
       }
     ]
   }
