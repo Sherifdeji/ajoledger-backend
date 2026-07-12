@@ -314,11 +314,17 @@ export class CyclesService {
     });
 
     if (existingPayout) {
-      throw new ConflictException(
-        `A payout for round ${cycle.currentRound} has already been initiated ` +
-          `(status: ${existingPayout.status}). ` +
-          'If it is still PROCESSING, wait for the webhook to confirm.',
-      );
+      if (existingPayout.status === PayoutStatus.FAILED) {
+        // Safe to retry: delete the dead record so we can generate a fresh one
+        // and try Nomba again with the newly corrected bank details.
+        await this.prisma.payout.delete({ where: { id: existingPayout.id } });
+      } else {
+        throw new ConflictException(
+          `A payout for round ${cycle.currentRound} has already been initiated ` +
+            `(status: ${existingPayout.status}). ` +
+            'If it is still PROCESSING, wait for the webhook to confirm.',
+        );
+      }
     }
 
     // ── 7. Calculate full pot payout amount ──────────────────────
@@ -365,14 +371,26 @@ export class CyclesService {
       `Initiating payout. payoutId=${payout.id} merchantTxRef=${merchantTxRef} amountKobo=${payoutAmountKobo}`,
     );
 
-    const transferResult = await this.nombaService.disbursePayout({
-      merchantTxRef,
-      amountKobo: payoutAmountKobo,
-      bankCode: winner.payoutBankCode,
-      accountNumber: winner.payoutAccountNumber,
-      accountName: winner.payoutAccountName,
-      narration: `AjoLedger payout — Round ${cycle.currentRound} of ${cycle.totalRounds}`,
-    });
+    let transferResult;
+    try {
+      transferResult = await this.nombaService.disbursePayout({
+        merchantTxRef,
+        amountKobo: payoutAmountKobo,
+        bankCode: winner.payoutBankCode,
+        accountNumber: winner.payoutAccountNumber,
+        accountName: winner.payoutAccountName,
+        narration: `AjoLedger payout — Round ${cycle.currentRound} of ${cycle.totalRounds}`,
+      });
+    } catch (error) {
+      // If the HTTP call to Nomba fails synchronously (e.g. 400 Bad Request
+      // due to invalid bank details), mark the DB record as FAILED so it
+      // doesn't stay stuck in PROCESSING forever, allowing the user to retry.
+      await this.prisma.payout.update({
+        where: { id: payout.id },
+        data: { status: PayoutStatus.FAILED },
+      });
+      throw error;
+    }
 
     this.logger.log(
       `Nomba transfer response. merchantTxRef=${merchantTxRef} nombaStatus=${transferResult.status}`,
