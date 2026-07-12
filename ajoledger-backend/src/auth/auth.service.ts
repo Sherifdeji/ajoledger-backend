@@ -31,7 +31,8 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<{ accessToken: string; user: { id: string; email: string } }> {
-    const existing = await this.usersService.findByEmail(email);
+    const sanitizedEmail = email.trim().toLowerCase();
+    const existing = await this.usersService.findByEmail(sanitizedEmail);
     if (existing) {
       throw new ConflictException(
         'An account with this email address already exists.',
@@ -39,7 +40,7 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    const user = await this.usersService.createUser(email, passwordHash);
+    const user = await this.usersService.createUser(sanitizedEmail, passwordHash);
     const accessToken = this.signToken(user.id, user.email);
 
     return {
@@ -56,7 +57,8 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<{ accessToken: string; user: { id: string; email: string } }> {
-    const user = await this.usersService.findByEmail(email);
+    const sanitizedEmail = email.trim().toLowerCase();
+    const user = await this.usersService.findByEmail(sanitizedEmail);
 
     // Constant-time comparison path whether user exists or not,
     // to avoid timing-based email enumeration attacks.
@@ -103,11 +105,22 @@ export class AuthService {
     }
 
     const { email, sub: googleId, given_name: firstName, family_name: lastName, email_verified } = payload;
+    const sanitizedEmail = email.trim().toLowerCase();
 
-    let user = await this.usersService.findByEmail(email);
+    let user = await this.usersService.findByEmail(sanitizedEmail);
 
     if (user) {
-      // Scenario B: Local user tries Google login
+      // C8: Strict Google ID binding — if the account already has a googleId
+      // linked, verify it matches the incoming token. Prevents an attacker
+      // who controls an email address from hijacking a pre-existing account
+      // by logging in via Google with a freshly created Google account.
+      if (user.googleId && user.googleId !== googleId) {
+        throw new UnauthorizedException(
+          'Google account mismatch. This email is linked to a different Google account.',
+        );
+      }
+
+      // Scenario B: Local user tries Google login for the first time
       if (user.authProvider === 'LOCAL') {
         if (!email_verified) {
           throw new UnauthorizedException('Google email is not verified.');
@@ -119,7 +132,7 @@ export class AuthService {
       if (!email_verified) {
         throw new UnauthorizedException('Google email is not verified.');
       }
-      user = await this.usersService.createUserGoogle(email, googleId, firstName, lastName);
+      user = await this.usersService.createUserGoogle(sanitizedEmail, googleId, firstName, lastName);
     }
 
     const accessToken = this.signToken(user.id, user.email);

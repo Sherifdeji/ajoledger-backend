@@ -1,4 +1,4 @@
-import { IsString, Length } from 'class-validator';
+import { IsString, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ResolveAccountDto {
@@ -7,6 +7,7 @@ export class ResolveAccountDto {
     description: 'CBN bank code (e.g. 058 = GTBank, 033 = UBA)',
   })
   @IsString()
+  @Matches(/^\d{3,6}$/, { message: 'bankCode must be 3–6 numeric digits.' })
   bankCode: string;
 
   @ApiProperty({
@@ -16,6 +17,6 @@ export class ResolveAccountDto {
     maxLength: 10,
   })
   @IsString()
-  @Length(10, 10, { message: 'accountNumber must be exactly 10 characters.' })
+  @Matches(/^\d{10}$/, { message: 'accountNumber must be exactly 10 numeric digits.' })
   accountNumber: string;
 }

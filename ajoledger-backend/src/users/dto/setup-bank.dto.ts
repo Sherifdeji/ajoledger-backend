@@ -1,4 +1,4 @@
-import { IsString, Length } from 'class-validator';
+import { IsString, Matches, MinLength, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class SetupBankDto {
@@ -7,6 +7,7 @@ export class SetupBankDto {
     description: 'CBN bank code for the destination bank (e.g. 058 = GTBank)',
   })
   @IsString()
+  @Matches(/^\d{3,6}$/, { message: 'bankCode must be 3–6 numeric digits.' })
   bankCode: string;
 
   @ApiProperty({
@@ -16,7 +17,7 @@ export class SetupBankDto {
     maxLength: 10,
   })
   @IsString()
-  @Length(10, 10, { message: 'accountNumber must be exactly 10 characters.' })
+  @Matches(/^\d{10}$/, { message: 'accountNumber must be exactly 10 numeric digits.' })
   accountNumber: string;
 
   @ApiProperty({
@@ -26,5 +27,7 @@ export class SetupBankDto {
       'Always resolve this value from Nomba before calling this endpoint.',
   })
   @IsString()
+  @MinLength(2, { message: 'accountName must be at least 2 characters.' })
+  @MaxLength(100, { message: 'accountName must not exceed 100 characters.' })
   accountName: string;
 }

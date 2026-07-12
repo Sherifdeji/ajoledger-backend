@@ -10,6 +10,7 @@ import {
 import {
   ContributionStatus,
   MemberRole,
+  PaymentStatus,
   PayoutStatus,
   Prisma,
 } from '@prisma/client';
@@ -35,8 +36,8 @@ export interface DisbursePayoutResult {
   round: number;
 }
 
-/** ₦40 total (₦20 for Nomba Virtual Account Inflow processing + ₦20 for Outbound Transfer) */
-const NOMBA_NETWORK_FEE_KOBO = 4000;
+// Fees are pre-collected from contributors via grossContributionAmount.
+// Payout disbursement sends the full pot with zero deductions.
 
 @Injectable()
 export class CyclesService {
@@ -320,29 +321,53 @@ export class CyclesService {
       );
     }
 
-    // ── 7. Calculate net payout amount ───────────────────────────
-    // Gross = contributionAmountKobo × number of members (totalRounds)
-    // Net   = Gross − NOMBA_NETWORK_FEE_KOBO (₦20, per T&Cs)
-    const grossPayoutKobo = cycle.contributionAmountKobo * cycle.totalRounds;
-    const netPayoutKobo = grossPayoutKobo - NOMBA_NETWORK_FEE_KOBO;
+    // ── 7. Calculate full pot payout amount ──────────────────────
+    // Fees (Nomba inflow processing + platform fee + outbound transfer) are
+    // pre-collected from contributors via the gross charge. The winner receives
+    // the complete pot with zero deductions at disbursement time.
+    const payoutAmountKobo = cycle.contributionAmountKobo * cycle.totalRounds;
 
-    if (netPayoutKobo <= 0) {
+    if (payoutAmountKobo <= 0) {
       throw new BadRequestException(
-        'Payout amount after network fee deduction is zero or negative. ' +
-          'Increase the contribution amount.',
+        'Payout amount is zero or negative. Increase the contribution amount.',
       );
     }
 
-    // ── 8. Call Nomba — OUTSIDE the DB write ─────────────────────
-    // Per architectural rule: network calls must not be inside Prisma $transaction blocks.
+    // ── 8. Write Payout record BEFORE calling Nomba ──────────────
+    // Writing first means if the Nomba call fails, the PROCESSING record
+    // remains as an audit trail for investigation and retry.
+    // If we wrote AFTER and the DB failed, the disbursed money would be untracked.
+    let payout;
+    try {
+      payout = await this.prisma.payout.create({
+        data: {
+          cycleId,
+          membershipId: winnerMembership.id,
+          amountKobo: payoutAmountKobo,
+          status: PayoutStatus.PROCESSING,
+          merchantTxRef,
+        },
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintViolation(error)) {
+        // Race condition: two concurrent requests both passed the idempotency
+        // check above, but only one can win the DB write.
+        throw new ConflictException(
+          `Payout for round ${cycle.currentRound} was already recorded by a concurrent request.`,
+        );
+      }
+      throw error;
+    }
+
+    // ── 9. Call Nomba — OUTSIDE any DB transaction ───────────────
     // merchantTxRef and X-Idempotent-key ensure Nomba deduplicates on retry.
     this.logger.log(
-      `Initiating payout. merchantTxRef=${merchantTxRef} amountKobo=${netPayoutKobo}`,
+      `Initiating payout. payoutId=${payout.id} merchantTxRef=${merchantTxRef} amountKobo=${payoutAmountKobo}`,
     );
 
     const transferResult = await this.nombaService.disbursePayout({
       merchantTxRef,
-      amountKobo: netPayoutKobo,
+      amountKobo: payoutAmountKobo,
       bankCode: winner.payoutBankCode,
       accountNumber: winner.payoutAccountNumber,
       accountName: winner.payoutAccountName,
@@ -353,38 +378,25 @@ export class CyclesService {
       `Nomba transfer response. merchantTxRef=${merchantTxRef} nombaStatus=${transferResult.status}`,
     );
 
-    // ── 9. Record the payout in the DB ───────────────────────────
-    // Status is PROCESSING — the round only advances after payout_success webhook fires.
-    // If this write fails, the merchantTxRef unique constraint prevents double-disburse on retry
-    // because Nomba's idempotency key will already have deduplicated the transfer.
-    try {
-      const payout = await this.prisma.payout.create({
-        data: {
-          cycleId,
-          membershipId: winnerMembership.id,
-          amountKobo: netPayoutKobo,
-          status: PayoutStatus.PROCESSING,
-          merchantTxRef,
-        },
-      });
-
-      return {
+    // ── 10. Insert Payment ledger row for the outflow ─────────────
+    // Immutable record linking this payout to the payments ledger.
+    // XOR invariant: payoutId is set, contributionId is null.
+    await this.prisma.payment.create({
+      data: {
         payoutId: payout.id,
-        merchantTxRef,
-        amountKobo: netPayoutKobo,
-        nombaStatus: transferResult.status,
-        round: cycle.currentRound,
-      };
-    } catch (error) {
-      if (this.isUniqueConstraintViolation(error)) {
-        // Race condition: two concurrent disburse calls both passed the existence check
-        // and both called Nomba (idempotent), but only one can win the DB write.
-        throw new ConflictException(
-          `Payout for round ${cycle.currentRound} was already recorded by a concurrent request.`,
-        );
-      }
-      throw error;
-    }
+        amountKobo: payoutAmountKobo,
+        status: PaymentStatus.SUCCESS,
+        nombaTransactionRef: transferResult.transactionRef,
+      },
+    });
+
+    return {
+      payoutId: payout.id,
+      merchantTxRef,
+      amountKobo: payoutAmountKobo,
+      nombaStatus: transferResult.status,
+      round: cycle.currentRound,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────

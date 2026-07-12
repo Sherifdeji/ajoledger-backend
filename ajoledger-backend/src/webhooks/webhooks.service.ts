@@ -11,7 +11,6 @@ import {
   NombaWebhookPayload,
   NombaWebhookResult,
 } from './interfaces/nomba-webhook-payload.interface';
-import { calculateGrossChargeKobo } from '../utils/fee-calculator.util';
 
 /** Number of days ahead to set the due date when seeding next-round contributions. */
 const NEXT_ROUND_DUE_DAYS = 30;
@@ -108,9 +107,6 @@ export class WebhooksService {
           select: {
             id: true,
             groupId: true,
-            group: {
-              select: { maxParticipants: true },
-            },
           },
         });
 
@@ -143,76 +139,57 @@ export class WebhooksService {
           };
         }
 
-        const contribution = await tx.contribution.findFirst({
+        // Atomic claim: update status ONLY if still PENDING.
+        // If a concurrent webhook already processed this contribution,
+        // updateMany returns count=0 and we return 'ignored' immediately.
+        const claimResult = await tx.contribution.updateMany({
           where: {
             membershipId: membership.id,
             cycleId: activeCycle.id,
             roundNumber: activeCycle.currentRound,
             status: ContributionStatus.PENDING,
           },
-          select: {
-            id: true,
-            payment: { select: { id: true } },
-          },
+          data: { status: ContributionStatus.PAID },
         });
 
-        if (!contribution) {
+        if (claimResult.count === 0) {
           this.logger.warn(
-            `Ignoring payment_success with no pending contribution. transactionId=${transactionId} membershipId=${membership.id} cycleId=${activeCycle.id}`,
+            `Contribution already claimed or missing — ignoring duplicate webhook. transactionId=${transactionId} membershipId=${membership.id}`,
           );
           return {
             status: 'ignored',
-            reason: 'No pending contribution for the active round.',
+            reason: 'No pending contribution for the active round (already claimed or missing).',
           };
         }
 
-        if (contribution.payment) {
-          return {
-            status: 'duplicate',
-            reason: 'Contribution already has a payment record.',
-            paymentId: contribution.payment.id,
-            contributionId: contribution.id,
-          };
-        }
-
-        const expectedGrossKobo = calculateGrossChargeKobo(
-          activeCycle.contributionAmountKobo,
-          membership.group.maxParticipants,
-          500 // Platform fee
-        );
-
-        if (paidAmountKobo !== expectedGrossKobo) {
-          this.logger.warn(
-            `Ignoring amount mismatch. transactionId=${transactionId} paid=${paidAmountKobo} expectedGross=${expectedGrossKobo}`,
-          );
-          return {
-            status: 'ignored',
-            reason: 'Paid amount does not match expected gross contribution amount.',
-          };
-        }
+        // Re-fetch to get the contribution ID for the Payment ledger FK.
+        const claimedContribution = await tx.contribution.findFirst({
+          where: {
+            membershipId: membership.id,
+            cycleId: activeCycle.id,
+            roundNumber: activeCycle.currentRound,
+            status: ContributionStatus.PAID,
+          },
+          select: { id: true },
+        });
 
         const payment = await tx.payment.create({
           data: {
-            contributionId: contribution.id,
+            contributionId: claimedContribution!.id,
             amountKobo: paidAmountKobo,
             status: PaymentStatus.SUCCESS,
             nombaTransactionRef: transactionId,
           },
         });
 
-        await tx.contribution.update({
-          where: { id: contribution.id },
-          data: { status: ContributionStatus.PAID },
-        });
-
         this.logger.log(
-          `✅ Payment of ${paidAmountKobo} Kobo successfully processed for membership ${membership.id} in cycle ${activeCycle.id}`,
+          `✅ Contribution of ${paidAmountKobo} Kobo processed. membershipId=${membership.id} cycleId=${activeCycle.id} paymentId=${payment.id}`,
         );
 
         return {
           status: 'processed',
           paymentId: payment.id,
-          contributionId: contribution.id,
+          contributionId: claimedContribution!.id,
         };
       });
     } catch (error) {

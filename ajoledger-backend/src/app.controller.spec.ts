@@ -15,8 +15,11 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return a health check object', () => {
+      const result = appController.getHealth();
+      expect(result.status).toBe('ok');
+      expect(result.service).toBe('AjoLedger API');
+      expect(typeof result.timestamp).toBe('string');
     });
   });
 });
