@@ -215,12 +215,19 @@ export class GroupsService {
         }
       }
 
+      const expectedGrossContributionAmount = calculateGrossChargeKobo(
+        m.group.defaultContributionAmountKobo,
+        m.group.maxParticipants,
+        500 // Platform fee
+      );
+
       return {
         id: m.group.id,
         name: m.group.name,
         inviteCode: m.group.inviteCode,
         frequency: m.group.frequency,
         contributionAmount: m.group.defaultContributionAmountKobo,
+        expectedGrossContributionAmount,
         joinedCount: memberCount,
         numberOfParticipants: m.group.maxParticipants,
         cycleDetails: {
@@ -296,6 +303,12 @@ export class GroupsService {
       myContributionStatus = contribution?.status ?? 'PENDING';
     }
 
+    const expectedGrossContributionAmount = calculateGrossChargeKobo(
+      group.defaultContributionAmountKobo,
+      group.maxParticipants,
+      500 // Platform fee (default ₦5)
+    );
+
     return {
       id: group.id,
       name: group.name,
@@ -303,6 +316,7 @@ export class GroupsService {
       inviteCode: group.inviteCode,
       frequency: group.frequency,
       contributionAmount: group.defaultContributionAmountKobo,
+      expectedGrossContributionAmount, // <--- Added here
       joinedCount: group.memberships.length,
       numberOfParticipants: group.maxParticipants,
       activeCycle: group.cycles[0]
@@ -322,6 +336,9 @@ export class GroupsService {
         email: m.user.email,
         role: m.role,
         payoutTurn: m.payoutTurn,
+        virtualAccountNumber: m.virtualAccountNumber, // <--- Exposed here
+        virtualBankName: m.virtualBankName,           // <--- Exposed here
+        virtualAccountName: m.virtualAccountName,     // <--- Exposed here
       })),
     };
   }

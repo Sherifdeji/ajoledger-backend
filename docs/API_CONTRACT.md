@@ -196,6 +196,7 @@ Fetches all savings groups the user belongs to, including limited details about 
       "inviteCode": "XYZ123",
       "frequency": "WEEKLY",
       "contributionAmount": 5000000,
+      "expectedGrossContributionAmount": 5025000,
       "joinedCount": 5,
       "numberOfParticipants": 10,
       "cycleDetails": {
@@ -226,6 +227,7 @@ Fetches full group details, the active cycle, and the user's dedicated Nomba vir
     "inviteCode": "XYZ123",
     "frequency": "WEEKLY",
     "contributionAmount": 5000000,
+    "expectedGrossContributionAmount": 5025000,
     "joinedCount": 5,
     "numberOfParticipants": 10,
     "activeCycle": {
@@ -240,7 +242,17 @@ Fetches full group details, the active cycle, and the user's dedicated Nomba vir
       "virtualBankName": "Nomba",
       "virtualAccountName": "AjoLedger - Backend Engineers Ajo"
     },
-    "members": [ ... ]
+    "members": [
+      {
+        "membershipId": "uuid-1",
+        "email": "coordinator@example.com",
+        "role": "COORDINATOR",
+        "payoutTurn": 1,
+        "virtualAccountNumber": "9933221100",
+        "virtualBankName": "Nomba",
+        "virtualAccountName": "AjoLedger - Backend Engineers Ajo"
+      }
+    ]
   }
 }
 ```
