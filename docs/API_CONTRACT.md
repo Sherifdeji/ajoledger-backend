@@ -245,6 +245,8 @@ Fetches full group details, the active cycle, and the user's dedicated Nomba vir
     "members": [
       {
         "membershipId": "uuid-member1",
+        "firstName": "Adam",
+        "lastName": "Abdulkareem",
         "email": "coordinator@example.com",
         "role": "COORDINATOR",
         "payoutTurn": 1,
@@ -255,6 +257,8 @@ Fetches full group details, the active cycle, and the user's dedicated Nomba vir
       },
       {
         "membershipId": "uuid-member2",
+        "firstName": "Okikiola",
+        "lastName": "Kazeem",
         "email": "member2@example.com",
         "role": "CONTRIBUTOR",
         "payoutTurn": 2,

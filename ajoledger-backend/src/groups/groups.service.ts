@@ -276,7 +276,7 @@ export class GroupsService {
       include: {
         memberships: {
           include: {
-            user: { select: { email: true } },
+            user: { select: { email: true, firstName: true, lastName: true } },
             contributions: {
               where: { cycle: { isActive: true } }
             }
@@ -378,6 +378,8 @@ export class GroupsService {
 
         return {
           membershipId: m.id,
+          firstName: m.user.firstName,
+          lastName: m.user.lastName,
           email: m.user.email,
           role: m.role,
           payoutTurn: m.payoutTurn,
