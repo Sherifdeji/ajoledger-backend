@@ -219,15 +219,9 @@ export class GroupsService {
           0,
         );
         
-        const myContributions = m.contributions.filter(c => c.roundNumber === activeCycle.currentRound);
-        if (myContributions.length > 0) {
-          if (myContributions.every(c => c.status === 'PAID')) {
-            myStatus = 'PAID';
-          } else if (myContributions.every(c => c.status === 'PENDING')) {
-            myStatus = 'PENDING';
-          } else {
-            myStatus = 'PARTIAL';
-          }
+        const myContribution = m.contributions.find(c => c.roundNumber === activeCycle.currentRound);
+        if (myContribution) {
+          myStatus = myContribution.status;
         }
       }
 
