@@ -447,11 +447,10 @@ export class GroupsService {
   }
 
   private buildVirtualAccountName(groupName: string, email: string): string {
-    // Nomba's validation logic on Render is extremely strict.
-    // We will strip ALL spaces and special characters from the group name,
-    // and prefix it with 'Ajo' to ensure it is 100% alphanumeric with exactly one space.
+    // Nomba rejects any non-alphanumeric character — including spaces — in the accountName field.
+    // Strip everything except letters and digits, prefix with 'Ajo', cap at 30 chars.
     const sanitizedGroup = groupName.replace(/[^a-zA-Z0-9]/g, '');
-    const finalName = `Ajo ${sanitizedGroup}`.slice(0, 30);
-    return finalName || 'AjoLedger Member';
+    const finalName = `Ajo${sanitizedGroup}`.slice(0, 30);
+    return finalName || 'AjoLedgerMember';
   }
 }
