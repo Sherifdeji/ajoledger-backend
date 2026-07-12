@@ -39,11 +39,19 @@ export class GroupsService {
     const groupId = crypto.randomUUID();
     const coordinatorMembershipId = crypto.randomUUID();
 
+    const defaultContributionAmountKobo = Math.round(dto.contributionAmount * 100);
+    const expectedAmountKobo = calculateGrossChargeKobo(
+      defaultContributionAmountKobo,
+      dto.numberOfParticipants,
+      500
+    );
+
     const coordinatorVirtualAccount =
       await this.nombaService.createStaticVirtualAccount({
         membershipId: coordinatorMembershipId,
         customerEmail: owner.email,
         customerName: this.buildVirtualAccountName(dto.name, owner.email),
+        expectedAmountKobo,
       });
 
     // Step 3: Persist group + COORDINATOR membership atomically.
@@ -56,7 +64,7 @@ export class GroupsService {
           name: dto.name,
           description: dto.description,
           frequency: dto.frequency,
-          defaultContributionAmountKobo: Math.round(dto.contributionAmount * 100),
+          defaultContributionAmountKobo,
           maxParticipants: dto.numberOfParticipants,
           inviteCode,
           ownerId: userId,
@@ -136,11 +144,19 @@ export class GroupsService {
 
     const user = await this.getUserForMembershipProvisioning(userId);
     const membershipId = crypto.randomUUID();
+
+    const expectedAmountKobo = calculateGrossChargeKobo(
+      group.defaultContributionAmountKobo,
+      group.maxParticipants,
+      500
+    );
+
     const membershipVirtualAccount =
       await this.nombaService.createStaticVirtualAccount({
         membershipId,
         customerEmail: user.email,
         customerName: this.buildVirtualAccountName(group.name, user.email),
+        expectedAmountKobo,
       });
 
     // Step 2: Create membership with a null payoutTurn.

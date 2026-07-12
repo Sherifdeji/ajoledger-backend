@@ -214,6 +214,7 @@ export class NombaService {
     customerEmail: string;
     customerName: string;
     bvn?: string;
+    expectedAmountKobo?: number;
   }): Promise<NombaStaticVirtualAccount> {
     const payload = {
       accountRef: params.membershipId,
@@ -222,6 +223,9 @@ export class NombaService {
       phoneNumber: '08000000000', // Dummy phone number as AjoLedger doesn't store phone
       bvn: params.bvn ?? '22222222222', // Dummy BVN for sandbox
       currency: 'NGN',
+      ...(params.expectedAmountKobo !== undefined && {
+        expectedAmount: params.expectedAmountKobo / 100,
+      }),
     };
     this.logger.log(`Outgoing Nomba VA Payload: ${JSON.stringify(payload)}`);
     const response = await firstValueFrom(
