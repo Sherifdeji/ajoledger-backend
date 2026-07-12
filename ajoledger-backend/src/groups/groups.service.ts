@@ -322,6 +322,22 @@ export class GroupsService {
       500 // Platform fee (default ₦5)
     );
 
+    let groupProgress = { paid: 0, pending: 0, total: group.memberships.length };
+
+    if (group.cycles[0]) {
+      const currentRound = group.cycles[0].currentRound;
+      for (const m of group.memberships) {
+        const currentContribution = m.contributions.find(
+          (c) => c.roundNumber === currentRound
+        );
+        if (currentContribution?.status === 'PAID') {
+          groupProgress.paid++;
+        } else {
+          groupProgress.pending++;
+        }
+      }
+    }
+
     return {
       id: group.id,
       name: group.name,
@@ -332,6 +348,7 @@ export class GroupsService {
       expectedGrossContributionAmount, // <--- Added here
       joinedCount: group.memberships.length,
       numberOfParticipants: group.maxParticipants,
+      groupProgress,
       activeCycle: group.cycles[0]
         ? {
             ...group.cycles[0],
@@ -356,15 +373,18 @@ export class GroupsService {
           }
         }
 
+        const isMe = m.userId === userId;
+        const canSeeDetails = membership.role === 'COORDINATOR' || isMe;
+
         return {
           membershipId: m.id,
           email: m.user.email,
           role: m.role,
           payoutTurn: m.payoutTurn,
-          virtualAccountNumber: m.virtualAccountNumber,
-          virtualBankName: m.virtualBankName,
-          virtualAccountName: m.virtualAccountName,
-          contributionStatus: memberStatus, // <--- Exposed here
+          virtualAccountNumber: canSeeDetails ? m.virtualAccountNumber : null,
+          virtualBankName: canSeeDetails ? m.virtualBankName : null,
+          virtualAccountName: canSeeDetails ? m.virtualAccountName : null,
+          contributionStatus: canSeeDetails ? memberStatus : null,
         };
       }),
     };

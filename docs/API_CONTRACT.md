@@ -229,7 +229,12 @@ Fetches full group details, the active cycle, and the user's dedicated Nomba vir
     "contributionAmount": 5000000,
     "expectedGrossContributionAmount": 5025000,
     "joinedCount": 5,
-    "numberOfParticipants": 10,
+    "numberOfParticipants": 5,
+    "groupProgress": {
+      "paid": 1,
+      "pending": 4,
+      "total": 5
+    },
     "activeCycle": {
       "id": "uuid",
       "contributionAmountKobo": 5000000,
@@ -237,21 +242,26 @@ Fetches full group details, the active cycle, and the user's dedicated Nomba vir
       "currentRound": 1,
       "myContributionStatus": "PENDING"
     },
-    "myDetails": {
-      "virtualAccountNumber": "9933221100",
-      "virtualBankName": "Nomba",
-      "virtualAccountName": "AjoLedger - Backend Engineers Ajo"
-    },
     "members": [
       {
-        "membershipId": "uuid-1",
+        "membershipId": "uuid-member1",
         "email": "coordinator@example.com",
         "role": "COORDINATOR",
         "payoutTurn": 1,
-        "virtualAccountNumber": "9933221100",
-        "virtualBankName": "Nomba",
-        "virtualAccountName": "AjoLedger - Backend Engineers Ajo",
-        "contributionStatus": "PENDING"
+        "virtualAccountNumber": "7484029489", // Null if viewer is not admin/self
+        "virtualBankName": "Nombank MFB", // Null if viewer is not admin/self
+        "virtualAccountName": "Nomba/Ajo Ledger", // Null if viewer is not admin/self
+        "contributionStatus": "PAID" // Null if viewer is not admin/self
+      },
+      {
+        "membershipId": "uuid-member2",
+        "email": "member2@example.com",
+        "role": "CONTRIBUTOR",
+        "payoutTurn": 2,
+        "virtualAccountNumber": null, // Masked for privacy
+        "virtualBankName": null, // Masked for privacy
+        "virtualAccountName": null, // Masked for privacy
+        "contributionStatus": null // Masked for privacy
       }
     ]
   }
