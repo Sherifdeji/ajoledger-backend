@@ -1,6 +1,6 @@
 # AjoLedger Backend
 
-A trustless, automated community finance and escrow engine (Ajo/Esusu) built for the **Nomba Hackathon 2026**.
+A trustless, automated community finance and escrow engine (Ajo/Esusu) built for the [**Nomba X Dev Career Hackathon 2026**](https://devcareer.io/programs/nomba-hackathon).
 
 AjoLedger eliminates the manual administration, trust issues, and operational friction of traditional savings groups by leveraging Nomba's enterprise banking APIs to automatically track contributions, secure funds, and disburse payouts.
 
@@ -8,7 +8,7 @@ AjoLedger eliminates the manual administration, trust issues, and operational fr
 
 ## 👨‍⚖️ Important: Reviewer Guide
 
-Welcome, Hackathon Judges and Reviewers! To save you time evaluating our project, we have pre-configured two test accounts. Both accounts already have their payout bank details pre-configured to save you an extra step!
+Welcome, Hackathon Judges and Reviewers! To save you time evaluating our project, we have pre-configured two test accounts for you.
 
 **📲 Download the Mobile App (APK):** [https://drive.google.com/drive/folders/12GXXVyOGmaRj0ZdgauH5xFnQaifSoMLh?usp=sharing](https://drive.google.com/drive/folders/12GXXVyOGmaRj0ZdgauH5xFnQaifSoMLh?usp=sharing)
 
@@ -18,13 +18,15 @@ Welcome, Hackathon Judges and Reviewers! To save you time evaluating our project
    - **Email:** `coordinator@ajoledger.com`
    - **Password:** `Nomba2026!`
    - *(Note: After logging in, the app will ask you to set a local 6-digit passcode. You can use any 6 numbers, e.g., `123456`)*
-2. **Create a Group:** Navigate to the "Groups" tab and create a new savings group. Take note of the invite code.
-3. **Switch Accounts:** Log out of the Coordinator account (or open the app on a second device).
-4. **Log in as the Contributor**
+2. **Setup Payout Bank Details:** Before you can receive or initiate any payouts, go to the **Profile tab -> Bank Details** and set up your local bank account. 
+3. **Create a Group:** Navigate to the "Groups" tab and create a new savings group. Take note of the invite code.
+4. **Switch Accounts:** Log out of the Coordinator account (or open the app on a second device).
+5. **Log in as the Contributor**
    - **Email:** `contributor@ajoledger.com`
    - **Password:** `Nomba2026!`
-5. **Join the Group:** Use the invite code generated in Step 2 to join the group.
-6. **Test the Workflow:** You can now test Nomba's virtual account generation, make contributions, and initiate payouts! 
+6. **Setup Payout Bank Details:** Go to the **Profile tab -> Bank Details** and set up the contributor's local bank account.
+7. **Join the Group:** Use the invite code generated in Step 3 to join the group.
+8. **Test the Workflow:** You can now test Nomba's virtual account generation, make contributions, and initiate payouts! 
    - **Transaction PIN:** Whenever the app asks for a 4-digit PIN to authorize a payout, use **`1234`**.
 
 ---
